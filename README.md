@@ -50,7 +50,7 @@ All the scripts are (more or less) idempotent. Note that in most cases the scrip
 
     !!! tip Note
 
-        Errors can happen and if they do, rather than starting all over, you can continue from a point closer to the failure point by running the "sub" scripts seprately:
+        Errors can happen and if they do, rather than starting all over, you can continue from a point closer to the failure point by running the "sub" scripts separately:
 
         ```powershell
         .\New-BicepDeployment.ps1 -ResourceNameMeronym <two alphanumeric, lowercase characters>
