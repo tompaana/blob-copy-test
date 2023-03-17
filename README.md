@@ -1,10 +1,10 @@
 # Blob copy test
 
-!!! warning Warning
-
-    This is a test project to identify possible problems with cross-region data copying, and to find solutions/workarounds. This is not secure piece of software and running it exposes sensitive information deliberately for troubleshooting purposes.
-
-    *Viewer discretion is advised.*
+> **Warning**
+>
+> This is a test project to identify possible problems with cross-region data copying, and to find solutions/workarounds. This is not secure piece of software and running it exposes sensitive information deliberately for troubleshooting purposes.
+>
+> *Viewer discretion is advised.*
 
 The solution will deploy two, peered virtual networks in different locations (`westeurope` and `swedencentral`) both containing a blob storage and a file share storage so 4 storage accounts in total. None of the storages allow public internet access, but use private endpoints instead. A very simple app service with a Swagger UI is provided to test copying blobs from different accounts to different file shares.
 
@@ -48,30 +48,30 @@ All the scripts are (more or less) idempotent. Note that in most cases the scrip
 
     > The resource name meronym is required for unique resource names should this solution ever be deployed by more than one person.
 
-    !!! tip Note
-
-        Errors can happen and if they do, rather than starting all over, you can continue from a point closer to the failure point by running the "sub" scripts separately:
-
-        ```powershell
-        .\New-BicepDeployment.ps1 -ResourceNameMeronym <two alphanumeric, lowercase characters>
-        ```
-
-        ```powershell
-        .\New-Blobs.ps1 -ResourceNameMeronym <two alphanumeric, lowercase characters>
-        ```
-
-        ```powershell
-        .\New-CodeDeployment.ps1 -ResourceNameMeronym <two alphanumeric, lowercase characters>
-        ```
-
-        If you deleted a previous deployment, due to the soft delete enabled for the Key Vault, you may need to recover it with command:
-
-        ```powershell
-        az keyvault recover `
-            --location westeurope `
-            --name kv-copytest<meronym>-dev `
-            --resource-group rg-copytest<meronym>-dev
-        ```
+    > **Note**
+    >
+    > Errors can happen and if they do, rather than starting all over, you can continue from a point closer to the failure point by running the "sub" scripts separately:
+    >
+    > ```powershell
+    > .\New-BicepDeployment.ps1 -ResourceNameMeronym <two alphanumeric, lowercase characters>
+    > ```
+    >
+    > ```powershell
+    > .\New-Blobs.ps1 -ResourceNameMeronym <two alphanumeric, lowercase characters>
+    > ```
+    >
+    > ```powershell
+    > .\New-CodeDeployment.ps1 -ResourceNameMeronym <two alphanumeric, lowercase characters>
+    > ```
+    >
+    > If you deleted a previous deployment, due to the soft delete enabled for the Key Vault, you may need to recover it with command:
+    >
+    > ```powershell
+    > az keyvault recover `
+    >     --location westeurope `
+    >     --name kv-copytest<meronym>-dev `
+    >     --resource-group rg-copytest<meronym>-dev
+    > ```
 
 1. If all goes well, head to the [Azure portal](https://portal.azure.com) and find the app service and launch it in the browser
 
@@ -86,8 +86,8 @@ All the scripts are (more or less) idempotent. Note that in most cases the scrip
 | `westeurope` | `swedencentral` | `westeurope` | FAILS with error `CannotVerifyCopySource` (* |
 | `westeurope` | `swedencentral` | `swedencentral` | OK |
 
-!!! tip *) Workaround
-
-    Add IP ranges of Azure storage accounts in `westeurope` to the firewall rules of the blob storage account in `swedencentral` ("`stctb<meronym>devswedencentral`") to allow access.
-
-    You can find the ranges at [Azure IP Ranges site](https://azureipranges.azurewebsites.net/). Enter "`Storage.WestEurope`" to the search box.
+> **Note** *) Workaround
+>
+> Add IP ranges of Azure storage accounts in `westeurope` to the firewall rules of the blob storage account in `swedencentral` ("`stctb<meronym>devswedencentral`") to allow access.
+>
+> You can find the ranges at [Azure IP Ranges site](https://azureipranges.azurewebsites.net/). Enter "`Storage.WestEurope`" to the search box.
