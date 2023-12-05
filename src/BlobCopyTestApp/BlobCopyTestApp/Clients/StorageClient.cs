@@ -6,7 +6,7 @@ using Azure.Storage.Files.Shares;
 using Azure.Storage.Files.Shares.Models;
 using Azure.Storage.Sas;
 
-namespace BlobCopyTestApp;
+namespace BlobCopyTestApp.Clients;
 
 public class StorageClient
 {

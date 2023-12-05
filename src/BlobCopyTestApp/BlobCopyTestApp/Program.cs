@@ -1,5 +1,8 @@
+using System.Reflection;
+using System.Text.Json;
 using Azure.Storage.Files.Shares.Models;
-using BlobCopyTestApp;
+using BlobCopyTestApp.Clients;
+using BlobCopyTestApp.Models;
 using Swashbuckle.AspNetCore.Annotations;
 
 const string BlobContainerName = "copytest";
@@ -9,7 +12,8 @@ const string BlobName = "test.txt";
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Configuration
-    .AddJsonFile("appsettings.json", true, true)
+    .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
+    .AddJsonFile($"appsettings.{builder.Environment.EnvironmentName}.json", optional: true, reloadOnChange: true)
     .AddEnvironmentVariables();
 
 builder.Services.AddEndpointsApiExplorer();
@@ -33,16 +37,24 @@ app.UseEndpoints(endpoints =>
     });
 });
 
-app.MapGet("/check",
-    [SwaggerOperation(Summary = "Check app status", Description = "Checks the app status verifying settings and access to resources.")]
+app.MapGet("/health",
+    [SwaggerOperation(Summary = "App health status", Description = "Checks the app status verifying settings and access to resources.")]
     async () =>
     {
-        var results = await CheckAsync();
-        return Results.Ok(results);
-    }).Produces<IList<string>>(StatusCodes.Status200OK);
+        AppConfig appConfig = await GetAppConfigAsync(app.Environment, app.Configuration);
+
+        if (appConfig.Status.Equals("OK"))
+        {
+            return Results.Ok(appConfig);
+        }
+
+        return Results.Problem(title: "Not healthy", detail: JsonSerializer.Serialize(appConfig), statusCode: 500);
+    })
+    .Produces<AppConfig>(StatusCodes.Status200OK)
+    .Produces(StatusCodes.Status500InternalServerError);
 
 app.MapPost("/copy",
-    [SwaggerOperation(Summary = "Copy blob to file share", Description = "Copies a blob from a storage account to a file share using the given locations (regions) e.g., from \"westeurope\" to \"swedencentral\".")]
+    [SwaggerOperation(Summary = "Copies blob to file share", Description = "Copies a blob from a storage account to a file share using the given locations (regions) e.g., from \"westeurope\" to \"swedencentral\".")]
     async (string from, string to) =>
     {
         IList<string> results = new List<string>();
@@ -58,7 +70,6 @@ app.MapPost("/copy",
 
         return Results.Ok(results);
     }).Produces<IList<string>>(StatusCodes.Status200OK);
-
 
 static async Task<IList<string>> CopyAsync(string from, string to)
 {
@@ -118,63 +129,31 @@ static async Task<IList<string>> CopyAsync(string from, string to)
     return results;
 }
 
-static async Task<IList<string>> CheckAsync()
+static async Task<AppConfig> GetAppConfigAsync(IHostEnvironment environment, IConfiguration configuration)
 {
-    IList<string> results = new List<string>();
+    AssemblyInformationalVersionAttribute? versionAttribute = Assembly.GetExecutingAssembly()
+        .GetCustomAttributes(typeof(AssemblyInformationalVersionAttribute), false)
+        .FirstOrDefault() as AssemblyInformationalVersionAttribute;
 
-    string? keyVaultName = Environment.GetEnvironmentVariable("KEY_VAULT_NAME");
-    string? blobStorageAccountNamePrefix = Environment.GetEnvironmentVariable("BLOB_STORAGE_ACCOUNT_NAME_PREFIX");
-    string? fileShareStorageAccountNamePrefix = Environment.GetEnvironmentVariable("FILE_SHARE_STORAGE_ACCOUNT_NAME_PREFIX");
+    AppConfig appConfig = new()
+    {
+        BuildVersion = versionAttribute?.InformationalVersion,
+        EnvironmentName = environment.EnvironmentName,
+        LogLevel = configuration["Logging:LogLevel:Default"],
+        KeyVaultName = Environment.GetEnvironmentVariable("KEY_VAULT_NAME"),
+        BlobStorageAccountNamePrefix = Environment.GetEnvironmentVariable("BLOB_STORAGE_ACCOUNT_NAME_PREFIX"),
+        FileShareStorageAccountNamePrefix = Environment.GetEnvironmentVariable("FILE_SHARE_STORAGE_ACCOUNT_NAME_PREFIX")
+    };
 
-    if (string.IsNullOrWhiteSpace(keyVaultName))
-    {
-        results.Add("Key Vault name missing!");
-    }
-    else
-    {
-        results.Add($"Key Vault name: {keyVaultName}");
-    }
-
-    if (string.IsNullOrWhiteSpace(blobStorageAccountNamePrefix))
-    {
-        results.Add("Blob storage account name prefix missing!");
-    }
-    else
-    {
-        results.Add($"Blob storage account name prefix: {blobStorageAccountNamePrefix}");
-    }
-
-    if (string.IsNullOrWhiteSpace(fileShareStorageAccountNamePrefix))
-    {
-        results.Add("File share storage account name prefix missing!");
-    }
-    else
-    {
-        results.Add($"File share storage account name prefix: {fileShareStorageAccountNamePrefix}");
-    }
-
-    string? fileShareStorageAccountKey = string.Empty;
-
-    try
+    if (!string.IsNullOrWhiteSpace(appConfig.KeyVaultName)
+        && !string.IsNullOrWhiteSpace(appConfig.FileShareStorageAccountNamePrefix))
     {
         KeyVaultClient keyVaultClient = new();
-        fileShareStorageAccountKey = await keyVaultClient.GetSecretAsync($"{fileShareStorageAccountNamePrefix}westeuropeKey");
-    }
-    catch (Exception e)
-    {
-        results.Add($"Failed to retrieve a file share storage key from Key Vault: {e}");
+        appConfig.FileShareStorageAccountKeyLength =
+            (await keyVaultClient.GetSecretAsync($"{appConfig.FileShareStorageAccountNamePrefix}westeuropeKey")).Length;
     }
 
-    if (string.IsNullOrWhiteSpace(fileShareStorageAccountKey))
-    {
-        results.Add("File share storage account key is empty!");
-    }
-    else
-    {
-        results.Add($"File share storage account key: {fileShareStorageAccountKey.Substring(0, 4)}...");
-    }
-
-    return results;
+    return appConfig;
 }
 
 app.Run();

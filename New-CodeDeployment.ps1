@@ -51,7 +51,8 @@ if ($NoBuild -or $NoPackage) {
 
     dotnet publish $AppServiceCodeSolutionPath `
         --configuration $BuildConfiguration `
-        --no-restore
+        --no-restore `
+        --version $Environment
 }
 
 if ($NoPackage) {
