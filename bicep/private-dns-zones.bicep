@@ -1,35 +1,33 @@
 @minLength(1)
 @maxLength(90)
-param vnetResourceGroupName string
+param vnetResourceGroupName string = resourceGroup().name
 
 @minLength(2)
 @maxLength(64)
 param vnetName string
 
+// See https://learn.microsoft.com/azure/private-link/private-endpoint-dns
 param privateDnsZoneNames array = [
   'privatelink.agentsvc.azure-automation.net'
   'privatelink.azurewebsites.net'
-  'privatelink.blob.${environment().suffixes.storage}'
-  'privatelink.file.${environment().suffixes.storage}'
+  'privatelink.blob.${environment().suffixes.storage}' // environment().suffixes.storage returns 'core.windows.net'
   'privatelink.monitor.azure.com'
   'privatelink.ods.opinsights.azure.com'
   'privatelink.oms.opinsights.azure.com'
-  'privatelink.queue.${environment().suffixes.storage}'
-  'privatelink.table.${environment().suffixes.storage}'
   'privatelink.vaultcore.azure.net'
 ]
 
-resource virtualNetwork 'Microsoft.Network/virtualNetworks@2022-01-01' existing = {
+resource virtualNetwork 'Microsoft.Network/virtualNetworks@2023-04-01' existing = {
   name: vnetName
   scope: resourceGroup(vnetResourceGroupName)
 }
 
-resource privateDnsZones 'Microsoft.Network/privateDnsZones@2020-06-01' = [for privateDnsZoneName in privateDnsZoneNames: {
+resource privateDnsZones 'Microsoft.Network/privateDnsZones@2020-06-01' = [for privateDnsZoneName in privateDnsZoneNames : {
   name: privateDnsZoneName
   location: 'global'
 }]
 
-resource virtualNetworkLinks 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2020-06-01' = [for (privateDnsZoneName, i) in privateDnsZoneNames: {
+resource virtualNetworkLinks 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2020-06-01' = [for (privateDnsZoneName, i) in privateDnsZoneNames : {
   name: replace('vnet-link-${privateDnsZoneName}', '.', '-')
   location: 'global'
   parent: privateDnsZones[i]

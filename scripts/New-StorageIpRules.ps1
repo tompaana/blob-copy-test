@@ -5,20 +5,29 @@ Param(
 )
 
 $JsonContent = Get-Content $IpRangesFilePath | Out-String | ConvertFrom-Json
+$AddressPrefixes = ""
 
 foreach ($AddressPrefix in $JsonContent.addressPrefixes) {
     if ($AddressPrefix -Match ":") {
-        Write-Output "`nSkipping IPv6 address prefix ${AddressPrefix}..."
+        Write-Output "Skipping IPv6 address prefix ${AddressPrefix}..."
         continue
     }
 
-    Write-Output "`nAdding rule to allow access from IP range ${AddressPrefix}..."
+    Write-Output "Adding IP to list ${AddressPrefix}..."
 
-    az storage account network-rule add `
-        --account-name $StorageAccountName `
-        --action Allow `
-        --ip-address $AddressPrefix `
-        --resource-group $ResourceGroupName
+    if ($AddressPrefixes.Length -eq 0) {
+        $AddressPrefixes = $AddressPrefix
+    } else {
+        $AddressPrefixes = $AddressPrefixes, $AddressPrefix -join " "
+    }
 }
+
+Write-Output "Whitelisting the list of IPs/ranges in storage account network rules..."
+
+az storage account network-rule add `
+    --account-name $StorageAccountName `
+    --action Allow `
+    --ip-address $AddressPrefixes `
+    --resource-group $ResourceGroupName
 
 Write-Output "`nFinished"

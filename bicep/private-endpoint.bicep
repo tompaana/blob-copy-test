@@ -3,14 +3,14 @@
 @description('The name of the service to create private link to.')
 param serviceName string
 
-@description('The resource ID of private link service.')
-param serviceId string
+param location string = resourceGroup().location
 
-param location string
+@description('The resource ID of the private link service.')
+param serviceId string
 
 @minLength(1)
 @maxLength(90)
-param vnetResourceGroupName string
+param vnetResourceGroupName string = resourceGroup().location
 
 @minLength(2)
 @maxLength(64)
@@ -20,19 +20,24 @@ param vnetName string
 @maxLength(80)
 param subnetName string
 
+@minLength(3)
 // See https://learn.microsoft.com/azure/private-link/private-endpoint-overview#private-link-resource for a subset of subresources
 @description('The ID of group obtained from the remote resource that this private endpoint should connect to e.g., "azuremonitor" or "sites".')
 param groupId string
 
+@minLength(22)
 param privateDnsZoneName string
 
 @minLength(36)
 @maxLength(36)
+#disable-next-line BCP334 BCP335
 param privateDnsZoneSubscriptionId string = subscription().subscriptionId
 
+@minLength(1)
+@maxLength(90)
 param privateDnsZoneResourceGroupName string = resourceGroup().name
 
-resource virtualNetwork 'Microsoft.Network/virtualNetworks@2022-01-01' existing  = {
+resource virtualNetwork 'Microsoft.Network/virtualNetworks@2023-04-01' existing  = {
   name: vnetName
   scope: resourceGroup(vnetResourceGroupName)
 }
@@ -42,7 +47,7 @@ resource privateDnsZone 'Microsoft.Network/privateDnsZones@2020-06-01' existing 
   scope: resourceGroup(privateDnsZoneSubscriptionId, privateDnsZoneResourceGroupName)
 }
 
-resource privateEndpoint 'Microsoft.Network/privateEndpoints@2022-01-01' = {
+resource privateEndpoint 'Microsoft.Network/privateEndpoints@2023-04-01' = {
   name: 'pep-${serviceName}-${groupId}'
   location: location
 
