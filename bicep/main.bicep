@@ -35,19 +35,18 @@ var fileShareName = blobContainerName
 var appServicePlanName = 'plan-${coreResourceNameSuffix}'
 var appServiceName = 'app-${coreResourceNameSuffix}'
 
+var privateDnsZoneNames = [
+  'privatelink.azurewebsites.net'
+  'privatelink.blob.${environment().suffixes.storage}'
+  'privatelink.file.${environment().suffixes.storage}'
+  'privatelink.vaultcore.azure.net'
+]
+
 module privateDnsZones './private-dns-zones.bicep' = {
   name: 'privateDnsZones'
 
   params: {
-    vnetResourceGroupName: resourceGroup().name
-    vnetName: coreVnetName
-
-    privateDnsZoneNames: [
-      'privatelink.azurewebsites.net'
-      'privatelink.blob.${environment().suffixes.storage}'
-      'privatelink.file.${environment().suffixes.storage}'
-      'privatelink.vaultcore.azure.net'
-    ]
+    privateDnsZoneNames: privateDnsZoneNames
   }
 }
 
@@ -136,6 +135,20 @@ module virtualNetworks './virtual-network.bicep' = [for (location, i) in locatio
   }
 
   dependsOn: [ privateDnsZones ]
+}]
+
+module virtualNetworkLinks './virtual-network-links.bicep' = [for (location, i) in locations: {
+  name: 'virtualNetworkLinks-${location}'
+
+  params: {
+    vnetName: vnetNames[i]
+    privateDnsZoneNames: privateDnsZoneNames
+  }
+
+  dependsOn: [
+    privateDnsZones
+    virtualNetworks
+  ]
 }]
 
 module virtualNetworkPeerings './virtual-network-peerings.bicep' = {
