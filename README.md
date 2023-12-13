@@ -77,6 +77,12 @@ All the scripts are (more or less) idempotent. Note that in most cases the scrip
 
 1. Copy some blobs using the Swagger UI (or a tool that can do POST calls of your choice)!
 
+1. Clean up by deleting the resource group:
+
+    ```bash
+    az group delete --name rg-copytest<meronym>-dev
+    ```
+
 ## Observed copy results
 
 | App service location | Source blob location | Destination file share location | Copy result |
