@@ -17,9 +17,8 @@ param kind string = 'app,linux'
 
 param serverFarmId string
 
-@minLength(4)
 @maxLength(63)
-param logAnalyticsWorkspaceName string
+param logAnalyticsWorkspaceName string = ''
 
 param allowPublicNetworkAccess bool
 
@@ -67,7 +66,7 @@ var appServiceLogs = kind != 'functionapp,linux' ? [
   }
 ]
 
-resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2022-10-01' existing = {
+resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2022-10-01' existing = if (!empty(logAnalyticsWorkspaceName)) {
   name: logAnalyticsWorkspaceName
 }
 
@@ -95,7 +94,7 @@ resource appService 'Microsoft.Web/sites@2022-03-01' = {
   }
 }
 
-resource diagnosticSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+resource diagnosticSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = if (!empty(logAnalyticsWorkspaceName)) {
   name: 'ds-${appServiceName}'
   scope: appService
 

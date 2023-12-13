@@ -291,10 +291,10 @@ module appService './app-service.bicep' = {
 
   params: {
     appServiceName: appServiceName
-    appServicePlanId: appServicePlan.outputs.appServicePlanId
+    serverFarmId: appServicePlan.outputs.appServicePlanId
     location: coreLocation
     allowPublicNetworkAccess: true
-    vnetEnabled: true
+    privateNetworkEnabled: true
 
     siteConfig: {
       linuxFxVersion: 'DOTNETCORE|6.0'
