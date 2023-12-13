@@ -14,13 +14,25 @@ param resourceNameMeronym string
 @description('The object ID of the user deploying this template. Will be used for role assignments.')
 param userObjectId string
 
+@allowed([
+  'privateEndpoint'
+  'serviceEndpoint'
+])
+param storageAccountPrivateConnectivityMethod string = 'privateEndpoint'
+
 var locations = [
   'westeurope'
   'swedencentral'
 ]
 
+var privateDnsZoneNames = [
+  'privatelink.azurewebsites.net'
+  'privatelink.blob.${environment().suffixes.storage}'
+  'privatelink.file.${environment().suffixes.storage}'
+  'privatelink.vaultcore.azure.net'
+]
+
 var coreLocation = locations[0]
-var vnetResourceGroupName = resourceGroup().name
 var vnetNames = [for location in locations: 'vnet-copytest${resourceNameMeronym}-${environmentAbbreviated}-${location}']
 var coreVnetName = 'vnet-copytest${resourceNameMeronym}-${environmentAbbreviated}-${coreLocation}'
 var sharedSubnetNamePrefix = 'snet-copytest${resourceNameMeronym}-shared-${environmentAbbreviated}'
@@ -34,13 +46,6 @@ var fileShareStorageAccountNamePrefix = 'stctf${resourceNameMeronym}${environmen
 var fileShareName = blobContainerName
 var appServicePlanName = 'plan-${coreResourceNameSuffix}'
 var appServiceName = 'app-${coreResourceNameSuffix}'
-
-var privateDnsZoneNames = [
-  'privatelink.azurewebsites.net'
-  'privatelink.blob.${environment().suffixes.storage}'
-  'privatelink.file.${environment().suffixes.storage}'
-  'privatelink.vaultcore.azure.net'
-]
 
 module privateDnsZones './private-dns-zones.bicep' = {
   name: 'privateDnsZones'
@@ -170,7 +175,6 @@ module keyVault './key-vault.bicep' = {
     location: coreLocation
     enableSoftDelete: false
     privateNetworkEnabled: true
-    vnetResourceGroupName: vnetResourceGroupName
     vnetName: coreVnetName
     subnetName: coreSharedSubnetName
   }
@@ -206,7 +210,8 @@ module blobStorageAccounts './storage-account.bicep' = [for (location, i) in loc
     keyVaultName: keyVaultName
     allowSharedKeyAccess: true
     privateNetworkEnabled: true
-    vnetResourceGroupName: vnetResourceGroupName
+    privateConnectivityMethod: storageAccountPrivateConnectivityMethod
+    vnetResourceGroupName: resourceGroup().name
     vnetName: vnetNames[i]
     subnetName: '${sharedSubnetNamePrefix}-${location}'
   }
@@ -254,7 +259,8 @@ module fileShareStorageAccounts './storage-account.bicep' = [for (location, i) i
     keyVaultName: keyVaultName
     allowSharedKeyAccess: true
     privateNetworkEnabled: true
-    vnetResourceGroupName: vnetResourceGroupName
+    privateConnectivityMethod: storageAccountPrivateConnectivityMethod
+    vnetResourceGroupName: resourceGroup().name
     vnetName: vnetNames[i]
     subnetName: '${sharedSubnetNamePrefix}-${location}'
   }
@@ -315,7 +321,6 @@ module appService './app-service.bicep' = {
       http20Enabled: true
     }
 
-    vnetResourceGroupName: resourceGroup().name
     vnetName: coreVnetName
     subnetName: appsSubnetName
     privateEndpointSubnetName: coreSharedSubnetName
