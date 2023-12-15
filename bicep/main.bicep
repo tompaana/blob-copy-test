@@ -20,9 +20,12 @@ param userObjectId string
 ])
 param storageAccountPrivateConnectivityMethod string = 'privateEndpoint'
 
+param primaryLocation string = 'westeurope'
+param secondaryLocation string = 'swedencentral'
+
 var locations = [
-  'westeurope'
-  'swedencentral'
+  primaryLocation
+  secondaryLocation
 ]
 
 var privateDnsZoneNames = [
@@ -44,7 +47,7 @@ var blobStorageAccountNamePrefix = 'stctb${resourceNameMeronym}${environmentAbbr
 var blobContainerName = 'copytest'
 var fileShareStorageAccountNamePrefix = 'stctf${resourceNameMeronym}${environmentAbbreviated}'
 var fileShareName = blobContainerName
-var appServicePlanName = 'plan-${coreResourceNameSuffix}'
+var appServicePlanName = 'asp-${coreResourceNameSuffix}'
 var appServiceName = 'app-${coreResourceNameSuffix}'
 
 module privateDnsZones './private-dns-zones.bicep' = {
@@ -398,6 +401,8 @@ module appServiceSettings './app-service-settings.bicep' = {
     appSettingsProperties: {
       ASPNETCORE_ENVIRONMENT: 'Development'
       WEBSITE_NODE_DEFAULT_VERSION: '6.9.1'
+      PRIMARY_LOCATION: primaryLocation
+      SECONDARY_LOCATION: secondaryLocation
       KEY_VAULT_NAME: keyVaultName
       BLOB_STORAGE_ACCOUNT_NAME_PREFIX: blobStorageAccountNamePrefix
       FILE_SHARE_STORAGE_ACCOUNT_NAME_PREFIX: fileShareStorageAccountNamePrefix

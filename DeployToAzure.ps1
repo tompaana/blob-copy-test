@@ -8,7 +8,8 @@
 
 Param(
     [Parameter(Mandatory, HelpMessage="Resource name meronym (lowercase alphanumeric, max length 2)")][string]$ResourceNameMeronym,
-    [string]$Environment = "dev"
+    [string]$Environment = "dev",
+    [switch]$UseServiceEndpoints
 )
 
 $ErrorActionPreference = "Stop"

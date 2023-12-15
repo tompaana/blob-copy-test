@@ -19,14 +19,14 @@ public class StorageClient
         string fileShareName,
         string filePath)
     {
-        DateTime tokenExpiry = DateTime.UtcNow.AddHours(24);
+        DateTime tokenExpiry = DateTime.UtcNow.AddMinutes(15);
         BlobSasPermissions blobSasPermissions = BlobSasPermissions.Read | BlobSasPermissions.Write;
         ShareFileSasPermissions shareFileSasPermissions = ShareFileSasPermissions.Create | ShareFileSasPermissions.Write;
 
         Uri blobUri = await GetBlobSasUriAsync(blobStorageAccountName, blobContainerName, blobName, tokenExpiry, blobSasPermissions);
         Uri fileSasUri = GetFileShareSasUri(fileShareStorageAccountName, fileShareStorageAccountKey, fileShareName, filePath, tokenExpiry, shareFileSasPermissions);
-        
-        var shareFileClient = new ShareFileClient(fileSasUri);
+
+        ShareFileClient shareFileClient = new(fileSasUri);
 
         return await shareFileClient.StartCopyAsync(blobUri);
     }
@@ -83,12 +83,13 @@ public class StorageClient
 
         fileShareSas.SetPermissions(permissions);
         StorageSharedKeyCredential credentials = new(storageAccountName, storageAccountKey);
+        Uri destinationUri = new($"https://{storageAccountName}.file.core.windows.net/{fileShareSas.ShareName}/{fileShareSas.FilePath}");
 
-        UriBuilder fileSasUri = new($"https://{storageAccountName}.file.core.windows.net/{fileShareSas.ShareName}/{fileShareSas.FilePath}")
+        ShareUriBuilder shareUriBuilder = new(destinationUri)
         {
-            Query = fileShareSas.ToSasQueryParameters(credentials).ToString()
+            Sas = fileShareSas.ToSasQueryParameters(credentials)
         };
 
-        return fileSasUri.Uri;
+        return shareUriBuilder.ToUri();
     }
 }

@@ -14,7 +14,7 @@ public class AppConfig
     public string? LogLevel { get; set; } = null;
 
     [JsonPropertyName("keyVaultName")]
-    public string? KeyVaultName {  get; set; } = string.Empty;
+    public string? KeyVaultName { get; set; } = string.Empty;
 
     [JsonPropertyName("blobStorageAccountNamePrefix")]
     public string? BlobStorageAccountNamePrefix { get; set; } = string.Empty;
