@@ -9,7 +9,8 @@
 Param(
     [Parameter(Mandatory, HelpMessage="Resource name meronym (lowercase alphanumeric, max length 2)")][string]$ResourceNameMeronym,
     [string]$Environment = "dev",
-    [switch]$UseServiceEndpoints
+    [switch]$UseServiceEndpoints,
+    [switch]$NoCode = $false
 )
 
 $ErrorActionPreference = "Stop"
@@ -72,8 +73,10 @@ Write-Output "`nUploading blobs..."
 
 .\New-Blobs.ps1 -ResourceNameMeronym $ResourceNameMeronym -Environment $Environment
 
-Write-Output "`nStarting code deployment..."
+if ($NoCode -eq $false) {
+    Write-Output "`nStarting code deployment..."
 
-.\New-CodeDeployment.ps1 -ResourceNameMeronym $ResourceNameMeronym -Environment $Environment
+    .\New-CodeDeployment.ps1 -ResourceNameMeronym $ResourceNameMeronym -Environment $Environment
 
-Write-Output "`nFinished"
+    Write-Output "`nFinished"
+}

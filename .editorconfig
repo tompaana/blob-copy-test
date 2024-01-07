@@ -1,21 +1,40 @@
+# top-most EditorConfig file
 root = true
+
+# Don't use tabs for indentation.
+[*]
+indent_style = space
+
+# Note that there is a corresponding setting set in the `.gitattributes` file
+# which should be regarded when adding/removing file types from this list.
 
 [*.bicep]
 end_of_line = lf
-trim_trailing_whitespace = true
+indent_size = 2
 insert_final_newline = true
-indent_style = space
+trim_trailing_whitespace = true
+
+[*.{cs,csx,ts,tsx,js}]
+end_of_line = crlf
+indent_size = 4
+insert_final_newline = true
+trim_trailing_whitespace = true
+#charset = utf-8
+
+# XML project files
+[*.{csproj,vbproj,vcxproj,vcxproj.filters,proj,projitems,shproj}]
 indent_size = 2
 
-# CSharp formatting rules:
-[*.cs]
+# XML config files
+[*.{props,targets,ruleset,config,nuspec,resx,vsixmanifest,vsct}]
+indent_size = 2
 
-end_of_line = crlf
-# charset = utf-8
-trim_trailing_whitespace = true
-insert_final_newline = true
-indent_style = space
-indent_size = 4
+# JSON files
+[*.json]
+indent_size = 2
+
+# C# code style settings:
+[*.cs]
 
 # New line preferences
 csharp_new_line_before_open_brace = all

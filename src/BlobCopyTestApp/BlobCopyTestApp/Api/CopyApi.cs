@@ -1,0 +1,176 @@
+﻿using System.ComponentModel.DataAnnotations;
+using Azure;
+using Azure.Storage.Files.Shares.Models;
+using BlobCopyTestApp.Clients;
+using BlobCopyTestApp.Models;
+using Microsoft.AspNetCore.Mvc;
+using Swashbuckle.AspNetCore.Annotations;
+using static BlobCopyTestApp.Api.BlobApi;
+
+namespace BlobCopyTestApp.Api;
+
+public static class CopyApi
+{
+    private const string BlobContainerName = "copytest";
+    private const string FileShareName = "copytest";
+    private const string BlobName = "test.txt";
+    private const string CopiedBlobName = "test-from-{0}.txt";
+
+    public static void RegisterCopyApi(this WebApplication app)
+    {
+        app.MapPost("/copy",
+        [SwaggerOperation(Summary = "Copies blob to file share", Description = "Copies a blob from a storage account to a file share using the given locations (regions) e.g., from \"westeurope\" to \"swedencentral\".")]
+        async ([FromQuery][Required] Location sourceLocation, [FromQuery][Required] Location destinationLocation) =>
+        {
+            CopyResult copyResult;
+
+            try
+            {
+                copyResult = await CopyAsync(sourceLocation, destinationLocation, app.Logger);
+            }
+            catch (Exception e)
+            {
+                return Results.Problem(title: $"Failed to copy", detail: e.Message, statusCode: StatusCodes.Status500InternalServerError);
+            }
+
+            return Results.Ok(copyResult);
+        })
+        .WithTags("Copy")
+        .Produces<CopyResult>(StatusCodes.Status200OK)
+        .Produces(StatusCodes.Status500InternalServerError);
+
+        app.MapPost("/copy/all",
+        [SwaggerOperation(Summary = "Copies blobs to file shares", Description = "Copies a blob from a storage account to a file share using all the possible location combinations.")]
+        async () =>
+        {
+            Location[] locations = { Location.PrimaryLocation, Location.SecondaryLocation };
+            IList<CopyResult> copyResults = new List<CopyResult>();
+
+            foreach (Location sourceLocation in locations)
+            {
+                foreach (Location destinationLocation in locations)
+                {
+                    try
+                    {
+                        copyResults.Add(await CopyAsync(sourceLocation, destinationLocation, app.Logger));
+                    }
+                    catch (Exception e)
+                    {
+#pragma warning disable CS8601 // Possible null reference assignment.
+                        copyResults.Add(new CopyResult()
+                        {
+                            SourceLocation = LocationEnumToString(sourceLocation),
+                            DestinationLocation = LocationEnumToString(destinationLocation),
+                            CopyStatus = CopyStatus.Failed,
+                            Message = e.Message
+                        });
+#pragma warning restore CS8601 // Possible null reference assignment.
+                    }
+                }
+            }
+
+            return Results.Ok(copyResults);
+        })
+        .WithTags("Copy")
+        .Produces<IList<CopyResult>>(StatusCodes.Status200OK)
+        .Produces(StatusCodes.Status500InternalServerError);
+    }
+
+    public static async Task<CopyResult> CopyAsync(Location sourceLocation, Location destinationLocation, ILogger logger)
+    {
+        string? from = LocationEnumToString(sourceLocation);
+        string? to = LocationEnumToString(destinationLocation);
+
+        if (string.IsNullOrEmpty(from) || string.IsNullOrEmpty(to))
+        {
+            throw new InvalidOperationException("Failed to resolve locations");
+        }
+
+        CopyResult copyResult;
+
+        try
+        {
+            logger.LogInformation("Trying to copy data from {from} to {to}");
+            copyResult = await CopyAsync(from, to);
+        }
+        catch (RequestFailedException e)
+        {
+            logger.LogError("Failed to copy from {from} to {to}: {errorMessage}", from, to, e.Message);
+
+            copyResult = new()
+            {
+                SourceLocation = from,
+                DestinationLocation = to,
+                CopyStatus = CopyStatus.Failed,
+                StatusCode = e.Status,
+                Message = e.Message
+            };
+        }
+        catch (Exception e)
+        {
+            logger.LogError("Failed to copy from {from} to {to}: {errorMessage}", from, to, e.Message);
+            throw;
+        }
+
+        logger.LogInformation("Initiated copy process of data from {from} to {to} successfully");
+        return copyResult;
+    }
+
+    public static async Task<CopyResult> CopyAsync(string from, string to)
+    {
+        string? blobStorageAccountNamePrefix = Environment.GetEnvironmentVariable("BLOB_STORAGE_ACCOUNT_NAME_PREFIX");
+        string? fileShareStorageAccountNamePrefix = Environment.GetEnvironmentVariable("FILE_SHARE_STORAGE_ACCOUNT_NAME_PREFIX");
+
+        if (string.IsNullOrWhiteSpace(blobStorageAccountNamePrefix)
+            || string.IsNullOrWhiteSpace(fileShareStorageAccountNamePrefix))
+        {
+            throw new InvalidOperationException("Missing environment values for storage account name prefixes");
+        }
+
+        string destinationFilePath = string.Format(CopiedBlobName, from);
+        string fileShareStorageAccountKeySecretName = $"{fileShareStorageAccountNamePrefix}{to}Key";
+        string? fileShareStorageAccountKey;
+
+        CopyResult copyResult = new()
+        {
+            SourceLocation = from,
+            DestinationLocation = to
+        };
+
+        try
+        {
+            KeyVaultClient keyVaultClient = new();
+            fileShareStorageAccountKey = await keyVaultClient.GetSecretAsync(fileShareStorageAccountKeySecretName);
+        }
+        catch (Exception e)
+        {
+            copyResult.Message = "Failed to retrieve file share storage account key by secret name {fileShareStorageAccountKeySecretName}: {e.Message}";
+            copyResult.Exception = e;
+            return copyResult;
+        }
+
+        string blobStorageAccountName = $"{blobStorageAccountNamePrefix}{from}";
+        string fileShareStorageAccountName = $"{fileShareStorageAccountNamePrefix}{to}";
+        ShareFileCopyInfo? shareFileCopyInfo = null;
+
+        try
+        {
+            shareFileCopyInfo = await StorageClient.CopyBlobToFileShareAsync(
+                blobStorageAccountName,
+                BlobContainerName,
+                BlobName,
+                fileShareStorageAccountName,
+                fileShareStorageAccountKey,
+                FileShareName,
+                destinationFilePath);
+        }
+        catch (Exception e)
+        {
+            copyResult.Message = e.Message;
+            copyResult.Exception = e;
+        }
+
+        copyResult.CopyStatus = (shareFileCopyInfo == null) ? CopyStatus.Failed : shareFileCopyInfo.CopyStatus;
+        return copyResult;
+    }
+}

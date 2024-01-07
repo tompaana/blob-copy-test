@@ -1,4 +1,5 @@
-﻿using Azure.Identity;
+﻿using Azure;
+using Azure.Identity;
 using Azure.Storage;
 using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
@@ -10,6 +11,69 @@ namespace BlobCopyTestApp.Clients;
 
 public class StorageClient
 {
+    public static BlobServiceClient GetBlobServiceClient(string storageAccountName, string? storageAccountKey = null)
+    {
+        Uri accountEndpoint = new($"https://{storageAccountName}.blob.core.windows.net");
+
+        if (string.IsNullOrWhiteSpace(storageAccountKey))
+        {
+            return new BlobServiceClient(accountEndpoint, new DefaultAzureCredential());
+        }
+
+        var credential = new StorageSharedKeyCredential(storageAccountName, storageAccountKey);
+        return new BlobServiceClient(accountEndpoint, credential);
+    }
+
+    public static BlobContainerClient GetBlobContainerClient(string storageAccountName, string containerName, string? storageAccountKey = null)
+    {
+        Uri accountEndpoint = new($"https://{storageAccountName}.blob.core.windows.net/{containerName}");
+
+        if (string.IsNullOrWhiteSpace(storageAccountKey))
+        {
+            return new BlobContainerClient(accountEndpoint, new DefaultAzureCredential());
+        }
+
+        var credential = new StorageSharedKeyCredential(storageAccountName, storageAccountKey);
+        return new BlobContainerClient(accountEndpoint, credential);
+    }
+
+    public static AsyncPageable<BlobContainerItem> GetBlobContainersAsync(string storageAccountName, string? storageAccountKey = null)
+    {
+        return GetBlobServiceClient(storageAccountName, storageAccountKey).GetBlobContainersAsync();
+    }
+
+    public static AsyncPageable<BlobItem> GetBlobsAsync(string storageAccountName, string containerName, string? storageAccountKey = null)
+    {
+        BlobContainerClient blobContainerClient = GetBlobContainerClient(storageAccountName, containerName, storageAccountKey);
+        return blobContainerClient.GetBlobsAsync();
+    }
+
+    public static bool DeleteBlob(string storageAccountName, string containerName, string blobName, string? storageAccountKey = null)
+    {
+        BlobContainerClient blobContainerClient = GetBlobContainerClient(storageAccountName, containerName, storageAccountKey);
+        BlobClient blobClient = blobContainerClient.GetBlobClient(blobName);
+        return blobClient.DeleteIfExists();
+    }
+
+    public static async Task<int> DeleteBlobsAsync(string storageAccountName, string containerName, string blobPathPrefix, string? storageAccountKey = null)
+    {
+        BlobContainerClient blobContainerClient = GetBlobContainerClient(storageAccountName, containerName, storageAccountKey);
+        var blobItems = blobContainerClient.GetBlobsAsync(prefix: blobPathPrefix);
+        int deletedCount = 0;
+
+        await foreach (BlobItem blobItem in blobItems)
+        {
+            BlobClient blobClient = blobContainerClient.GetBlobClient(blobItem.Name);
+
+            if (await blobClient.DeleteIfExistsAsync())
+            {
+                deletedCount++;
+            }
+        }
+
+        return deletedCount;
+    }
+
     public static async Task<ShareFileCopyInfo> CopyBlobToFileShareAsync(
         string blobStorageAccountName,
         string blobContainerName,

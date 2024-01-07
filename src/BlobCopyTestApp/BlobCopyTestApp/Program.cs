@@ -1,3 +1,5 @@
+using BlobCopyTestApp.Api;
+
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Configuration
@@ -33,6 +35,8 @@ app.UseEndpoints(endpoints =>
     });
 });
 
-
+app.RegisterBlobApi();
+app.RegisterCopyApi();
+app.RegisterHealthApi();
 
 app.Run();
