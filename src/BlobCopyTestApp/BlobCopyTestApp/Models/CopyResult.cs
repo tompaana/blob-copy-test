@@ -19,7 +19,4 @@ public class CopyResult
 
     [JsonPropertyName("message")]
     public string? Message { get; set; } = null;
-
-    [JsonPropertyName("exception")]
-    public Exception? Exception { get; set; } = default!;
 }

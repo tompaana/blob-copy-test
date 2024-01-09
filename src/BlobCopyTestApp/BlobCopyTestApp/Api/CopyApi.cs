@@ -63,8 +63,7 @@ public static class CopyApi
                             SourceLocation = LocationEnumToString(sourceLocation),
                             DestinationLocation = LocationEnumToString(destinationLocation),
                             CopyStatus = CopyStatus.Failed,
-                            Message = e.Message,
-                            Exception = e
+                            Message = e.Message
                         });
 #pragma warning restore CS8601 // Possible null reference assignment.
                     }
@@ -120,8 +119,7 @@ public static class CopyApi
         }
         catch (Exception e)
         {
-            copyResult.Message = "Failed to retrieve file share storage account key by secret name {fileShareStorageAccountKeySecretName}: {e.Message}";
-            copyResult.Exception = e;
+            copyResult.Message = $"Failed to retrieve file share storage account key by secret name {fileShareStorageAccountKeySecretName}: {e.Message}";
             return copyResult;
         }
 
@@ -142,15 +140,14 @@ public static class CopyApi
         }
         catch (RequestFailedException e)
         {
-            logger.LogError("Failed to copy from {from} to {to}: {errorMessage}", from, to, e.Message);
-            copyResult.Message = e.Message;
-            copyResult.Exception = e;
+            copyResult.StatusCode = e.Status;
+            copyResult.Message = $"Failed to copy from {from} to {to}: {e.Message}";
+            logger.LogError(copyResult.Message);
         }
         catch (Exception e)
         {
-            logger.LogError("Failed to copy from {from} to {to}: {errorMessage}", from, to, e.Message);
-            copyResult.Message = e.Message;
-            copyResult.Exception = e;
+            copyResult.Message = $"Failed to copy from {from} to {to}: {e.Message}";
+            logger.LogError(copyResult.Message);
         }
 
         copyResult.CopyStatus = (shareFileCopyInfo == null) ? CopyStatus.Failed : shareFileCopyInfo.CopyStatus;
