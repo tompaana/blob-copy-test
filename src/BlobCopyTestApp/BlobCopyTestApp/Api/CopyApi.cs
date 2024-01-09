@@ -151,7 +151,9 @@ public static class CopyApi
         }
 
         copyResult.CopyStatus = (shareFileCopyInfo == null) ? CopyStatus.Failed : shareFileCopyInfo.CopyStatus;
-        logger.LogInformation("Copy operation appears to have successful or successfully started");
+        copyResult.StatusCode = 201;
+        copyResult.Message = "Copy operation appears successful or was successfully started";
+        logger.LogInformation(copyResult.Message);
         return copyResult;
     }
 }
