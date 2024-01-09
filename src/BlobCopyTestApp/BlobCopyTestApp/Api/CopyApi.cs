@@ -15,12 +15,13 @@ public static class CopyApi
     private const string FileShareName = "copytest";
     private const string BlobName = "test.txt";
     private const string CopiedBlobName = "test-from-{0}.txt";
+    private const string StorageAccountKeySecretName = "{0}{1}StorageAccountKey";
 
     public static void RegisterCopyApi(this WebApplication app)
     {
         app.MapPost("/copy",
         [SwaggerOperation(Summary = "Copies blob to file share", Description = "Copies a blob from a storage account to a file share using the given locations (regions) e.g., from \"westeurope\" to \"swedencentral\".")]
-        async ([FromQuery][Required] Location sourceLocation, [FromQuery][Required] Location destinationLocation) =>
+        async ([FromQuery][Required] string sourceLocation, [FromQuery][Required] string destinationLocation) =>
         {
             CopyResult copyResult;
 
@@ -103,7 +104,7 @@ public static class CopyApi
         }
 
         string destinationFilePath = string.Format(CopiedBlobName, from);
-        string fileShareStorageAccountKeySecretName = $"{fileShareStorageAccountNamePrefix}{to}Key";
+        string fileShareStorageAccountKeySecretName = string.Format(StorageAccountKeySecretName, fileShareStorageAccountNamePrefix, to);
         string? fileShareStorageAccountKey;
 
         CopyResult copyResult = new()
