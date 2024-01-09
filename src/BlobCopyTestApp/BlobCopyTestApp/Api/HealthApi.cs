@@ -59,7 +59,7 @@ public static class HealthApi
         {
             KeyVaultClient keyVaultClient = new();
             appConfig.FileShareStorageAccountKeyLength =
-                (await keyVaultClient.GetSecretAsync($"{appConfig.FileShareStorageAccountNamePrefix}westeuropeKey")).Length;
+                (await keyVaultClient.GetSecretAsync($"{appConfig.FileShareStorageAccountNamePrefix}westeuropeStorageAccountKey")).Length;
         }
 
         return appConfig;
