@@ -62,7 +62,8 @@ public static class CopyApi
                             SourceLocation = LocationEnumToString(sourceLocation),
                             DestinationLocation = LocationEnumToString(destinationLocation),
                             CopyStatus = CopyStatus.Failed,
-                            Message = e.Message
+                            Message = e.Message,
+                            Exception = e
                         });
 #pragma warning restore CS8601 // Possible null reference assignment.
                     }
@@ -86,38 +87,12 @@ public static class CopyApi
             throw new InvalidOperationException("Failed to resolve locations");
         }
 
-        CopyResult copyResult;
-
-        try
-        {
-            logger.LogInformation("Trying to copy data from {from} to {to}");
-            copyResult = await CopyAsync(from, to);
-        }
-        catch (RequestFailedException e)
-        {
-            logger.LogError("Failed to copy from {from} to {to}: {errorMessage}", from, to, e.Message);
-
-            copyResult = new()
-            {
-                SourceLocation = from,
-                DestinationLocation = to,
-                CopyStatus = CopyStatus.Failed,
-                StatusCode = e.Status,
-                Message = e.Message
-            };
-        }
-        catch (Exception e)
-        {
-            logger.LogError("Failed to copy from {from} to {to}: {errorMessage}", from, to, e.Message);
-            throw;
-        }
-
-        logger.LogInformation("Initiated copy process of data from {from} to {to} successfully");
-        return copyResult;
+        return await CopyAsync(from, to, logger);
     }
 
-    public static async Task<CopyResult> CopyAsync(string from, string to)
+    public static async Task<CopyResult> CopyAsync(string from, string to, ILogger logger)
     {
+
         string? blobStorageAccountNamePrefix = Environment.GetEnvironmentVariable("BLOB_STORAGE_ACCOUNT_NAME_PREFIX");
         string? fileShareStorageAccountNamePrefix = Environment.GetEnvironmentVariable("FILE_SHARE_STORAGE_ACCOUNT_NAME_PREFIX");
 
@@ -164,13 +139,21 @@ public static class CopyApi
                 FileShareName,
                 destinationFilePath);
         }
+        catch (RequestFailedException e)
+        {
+            logger.LogError("Failed to copy from {from} to {to}: {errorMessage}", from, to, e.Message);
+            copyResult.Message = e.Message;
+            copyResult.Exception = e;
+        }
         catch (Exception e)
         {
+            logger.LogError("Failed to copy from {from} to {to}: {errorMessage}", from, to, e.Message);
             copyResult.Message = e.Message;
             copyResult.Exception = e;
         }
 
         copyResult.CopyStatus = (shareFileCopyInfo == null) ? CopyStatus.Failed : shareFileCopyInfo.CopyStatus;
+        logger.LogInformation("Copy operation appears to have successful or successfully started");
         return copyResult;
     }
 }

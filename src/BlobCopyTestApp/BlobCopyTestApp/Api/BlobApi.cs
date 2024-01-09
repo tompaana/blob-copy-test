@@ -27,7 +27,7 @@ public static class BlobApi
         [SwaggerOperation(Summary = "Lists blobs", Description = "List blobs in storage accounts")]
         async () =>
         {
-            IList<StorageAccountContent> storageAccountContents = null;
+            IList<StorageAccountContent>? storageAccountContents = null;
 
             try
             {
