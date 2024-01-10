@@ -80,14 +80,19 @@ module virtualNetworks './virtual-network.bicep' = [for (location, i) in locatio
         properties: {
           addressPrefix: '10.0.1.0/24'
 
-          serviceEndpoints: [
+          serviceEndpoints: (storageAccountPrivateConnectivityMethod == 'privateEndpoint') ? [
+            {
+              locations: [ location ]
+              service: 'Microsoft.KeyVault'
+            }
+          ] : [
             {
               locations: [ location ]
               service: 'Microsoft.KeyVault'
             }
             {
               locations: [ location ]
-              service: 'Microsoft.Storage'
+              service: 'Microsoft.Storage.Global'
             }
           ]
 
@@ -124,14 +129,19 @@ module virtualNetworks './virtual-network.bicep' = [for (location, i) in locatio
         properties: {
           addressPrefix: '10.0.4.0/24'
 
-          serviceEndpoints: [
+          serviceEndpoints: (storageAccountPrivateConnectivityMethod == 'privateEndpoint') ? [
+            {
+              locations: [ location ]
+              service: 'Microsoft.KeyVault'
+            }
+          ] : [
             {
               locations: [ location ]
               service: 'Microsoft.KeyVault'
             }
             {
               locations: [ location ]
-              service: 'Microsoft.Storage'
+              service: 'Microsoft.Storage.Global'
             }
           ]
 
