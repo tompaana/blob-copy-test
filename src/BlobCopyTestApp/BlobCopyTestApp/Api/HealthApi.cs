@@ -1,10 +1,10 @@
+namespace BlobCopyTestApp.Api;
+
 using System.Reflection;
 using System.Text.Json;
 using BlobCopyTestApp.Clients;
 using BlobCopyTestApp.Models;
 using Swashbuckle.AspNetCore.Annotations;
-
-namespace BlobCopyTestApp.Api;
 
 public static class HealthApi
 {

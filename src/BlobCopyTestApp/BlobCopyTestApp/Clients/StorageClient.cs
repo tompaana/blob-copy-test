@@ -1,4 +1,6 @@
-﻿using Azure;
+﻿namespace BlobCopyTestApp.Clients;
+
+using Azure;
 using Azure.Identity;
 using Azure.Storage;
 using Azure.Storage.Blobs;
@@ -7,10 +9,14 @@ using Azure.Storage.Files.Shares;
 using Azure.Storage.Files.Shares.Models;
 using Azure.Storage.Sas;
 
-namespace BlobCopyTestApp.Clients;
-
 public class StorageClient
 {
+    private ShareClient? _shareClient;
+
+    public StorageClient()
+    {
+    }
+
     public static BlobServiceClient GetBlobServiceClient(string storageAccountName, string? storageAccountKey = null)
     {
         Uri accountEndpoint = new($"https://{storageAccountName}.blob.core.windows.net");
@@ -48,6 +54,27 @@ public class StorageClient
         return blobContainerClient.GetBlobsAsync();
     }
 
+    public IList<string> GetFiles(string storageAccountName, string storageAccountKey, string shareName, string rootDirectory = "")
+    {
+        IList<string> filePaths = new List<string>();
+        ShareClient shareClient = GetShareClient(storageAccountName, storageAccountKey, shareName);
+        ShareDirectoryClient directoryClient = shareClient.GetDirectoryClient(string.Empty);
+        var shareFileItems = directoryClient.GetFilesAndDirectories();
+
+        foreach (var shareFileItem in shareFileItems)
+        {
+            if (shareFileItem.IsDirectory)
+            {
+                string path = Path.Combine(rootDirectory, shareFileItem.Name);
+                ((List<string>)filePaths).AddRange(GetFiles(storageAccountName, storageAccountKey, shareName, path));
+            }
+
+            filePaths.Add(Path.Combine(rootDirectory, shareFileItem.Name));
+        }
+
+        return filePaths;
+    }
+
     public static bool DeleteBlob(string storageAccountName, string containerName, string blobName, string? storageAccountKey = null)
     {
         BlobContainerClient blobContainerClient = GetBlobContainerClient(storageAccountName, containerName, storageAccountKey);
@@ -74,7 +101,7 @@ public class StorageClient
         return deletedCount;
     }
 
-    public static async Task<ShareFileCopyInfo> CopyBlobToFileShareAsync(
+    public static async Task<ShareFileCopyInfo> StartCopyBlobToFileShareAsync(
         string blobStorageAccountName,
         string blobContainerName,
         string blobName,
@@ -146,14 +173,26 @@ public class StorageClient
         };
 
         fileShareSas.SetPermissions(permissions);
-        StorageSharedKeyCredential credentials = new(storageAccountName, storageAccountKey);
+        StorageSharedKeyCredential credential = new(storageAccountName, storageAccountKey);
         Uri destinationUri = new($"https://{storageAccountName}.file.core.windows.net/{fileShareSas.ShareName}/{fileShareSas.FilePath}");
 
         ShareUriBuilder shareUriBuilder = new(destinationUri)
         {
-            Sas = fileShareSas.ToSasQueryParameters(credentials)
+            Sas = fileShareSas.ToSasQueryParameters(credential)
         };
 
         return shareUriBuilder.ToUri();
+    }
+
+    private ShareClient GetShareClient(string storageAccountName, string storageAccountKey, string shareName)
+    {
+        if (_shareClient == null || !_shareClient.Name.Equals(shareName))
+        {
+            Uri shareUri = new($"https://{storageAccountName}.file.core.windows.net/{shareName}");
+            StorageSharedKeyCredential credential = new(storageAccountName, storageAccountKey);
+            _shareClient = new ShareClient(shareUri, credential);
+        }
+
+        return _shareClient;
     }
 }

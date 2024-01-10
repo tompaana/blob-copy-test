@@ -35,8 +35,7 @@ app.UseEndpoints(endpoints =>
     });
 });
 
-app.RegisterBlobApi();
-app.RegisterCopyApi();
 app.RegisterHealthApi();
+app.RegisterStorageApi();
 
 app.Run();

@@ -8,5 +8,8 @@ public class StorageAccountContent
     public string StorageAccountName { get; set; } = string.Empty;
 
     [JsonPropertyName("blobContainers")]
-    public IList<StorageAccountBlobContainer> BlobContainers { get; set; } = new List<StorageAccountBlobContainer>();
+    public IList<StorageAccountBlobContainer>? BlobContainers { get; set; } = null;
+
+    [JsonPropertyName("fileShares")]
+    public IList<StorageAccountFileShare>? FileShares { get; set; } = null;
 }

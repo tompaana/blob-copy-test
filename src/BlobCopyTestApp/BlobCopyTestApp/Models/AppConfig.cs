@@ -1,6 +1,6 @@
-﻿using System.Text.Json.Serialization;
+﻿namespace BlobCopyTestApp.Models;
 
-namespace BlobCopyTestApp.Models;
+using System.Text.Json.Serialization;
 
 public class AppConfig
 {
