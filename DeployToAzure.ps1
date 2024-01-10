@@ -2,9 +2,15 @@
 #
 # Usage:
 #
-# .\DeployToAzure.ps1 -ResourceNameMeronym <resource name meronym> -Environment {dev, test, prod}
+# .\DeployToAzure.ps1 `
+#       -ResourceNameMeronym <resource name meronym> `
+#       -Environment {dev, test, prod} `
+#       {-UseServiceEndpoints} {-NoCode}
 #
-# Tested to work with Azure CLI version 2.46.0
+# -UseServiceEndpoints flag will provision storage accounts with service endpoints as private connectivity method
+# instead of private endpoints. Note that latter (private endpoints) is the recommended option.
+#
+# Tested to work with Azure CLI version 2.56.0
 
 Param(
     [Parameter(Mandatory, HelpMessage="Resource name meronym (lowercase alphanumeric, max length 2)")][string]$ResourceNameMeronym,
@@ -54,6 +60,11 @@ Write-Output "`nUsing the following subscription and identity to deploy the proj
 Write-Output "  - Subscription: ${SubscriptionName} (${SubscriptionId})"
 Write-Output "  - Signed in user: ${UserDisplayName}`n    - User principal name: ${UserPrincipalName}`n    - Object ID: ${UserObjectId}"
 
+if ($UseServiceEndpoints -eq $true) {
+    Write-Output ""  # Newline
+    Write-Warning "Using service endpoints instead of private endpoints for private connectivity method."
+}
+
 $Confirmation = Read-Host "`nAre you sure you want to proceed (y/n)?"
 
 if ($Confirmation.ToLower() -ne 'y' -and $Confirmation.ToLower() -ne 'yes') {
@@ -63,11 +74,20 @@ if ($Confirmation.ToLower() -ne 'y' -and $Confirmation.ToLower() -ne 'yes') {
 
 Write-Output "`nStarting deployment..."
 
-.\New-BicepDeployment.ps1 `
-    -ResourceNameMeronym $ResourceNameMeronym `
-    -Environment $Environment `
-    -SubscriptionId $SubscriptionId `
-    -UserObjectId $UserObjectId
+if ($UseServiceEndpoints -eq $true) {
+    .\New-BicepDeployment.ps1 `
+        -ResourceNameMeronym $ResourceNameMeronym `
+        -Environment $Environment `
+        -SubscriptionId $SubscriptionId `
+        -UserObjectId $UserObjectId `
+        -UseServiceEndpoints
+} else {
+    .\New-BicepDeployment.ps1 `
+        -ResourceNameMeronym $ResourceNameMeronym `
+        -Environment $Environment `
+        -SubscriptionId $SubscriptionId `
+        -UserObjectId $UserObjectId
+}
 
 Write-Output "`nUploading blobs..."
 
