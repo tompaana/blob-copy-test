@@ -16,6 +16,9 @@ public class AppConfig
     [JsonPropertyName("keyVaultName")]
     public string? KeyVaultName { get; set; } = string.Empty;
 
+    [JsonPropertyName("privateConnectivityMethod")]
+    public string? PrivateConnectivityMethod { get; set; } = null;
+
     [JsonPropertyName("blobStorageAccountNamePrefix")]
     public string? BlobStorageAccountNamePrefix { get; set; } = string.Empty;
 

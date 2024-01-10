@@ -406,6 +406,7 @@ module appServiceSettings './app-service-settings.bicep' = {
       KEY_VAULT_NAME: keyVaultName
       BLOB_STORAGE_ACCOUNT_NAME_PREFIX: blobStorageAccountNamePrefix
       FILE_SHARE_STORAGE_ACCOUNT_NAME_PREFIX: fileShareStorageAccountNamePrefix
+      PRIVATE_CONNECTIVITY_METHOD: storageAccountPrivateConnectivityMethod
     }
   }
 

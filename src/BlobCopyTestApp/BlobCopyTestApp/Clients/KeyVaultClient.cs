@@ -1,7 +1,7 @@
-﻿using Azure.Identity;
-using Azure.Security.KeyVault.Secrets;
+﻿namespace BlobCopyTestApp.Clients;
 
-namespace BlobCopyTestApp.Clients;
+using Azure.Identity;
+using Azure.Security.KeyVault.Secrets;
 
 public class KeyVaultClient
 {

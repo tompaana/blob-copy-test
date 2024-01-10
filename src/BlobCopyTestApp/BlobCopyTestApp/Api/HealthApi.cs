@@ -50,6 +50,7 @@ public static class HealthApi
             EnvironmentName = environment.EnvironmentName,
             LogLevel = configuration["Logging:LogLevel:Default"],
             KeyVaultName = Environment.GetEnvironmentVariable("KEY_VAULT_NAME"),
+            PrivateConnectivityMethod = Environment.GetEnvironmentVariable("PRIVATE_CONNECTIVITY_METHOD"),
             BlobStorageAccountNamePrefix = Environment.GetEnvironmentVariable("BLOB_STORAGE_ACCOUNT_NAME_PREFIX"),
             FileShareStorageAccountNamePrefix = Environment.GetEnvironmentVariable("FILE_SHARE_STORAGE_ACCOUNT_NAME_PREFIX")
         };
@@ -58,8 +59,15 @@ public static class HealthApi
             && !string.IsNullOrWhiteSpace(appConfig.FileShareStorageAccountNamePrefix))
         {
             KeyVaultClient keyVaultClient = new();
-            appConfig.FileShareStorageAccountKeyLength =
-                (await keyVaultClient.GetSecretAsync($"{appConfig.FileShareStorageAccountNamePrefix}westeuropeStorageAccountKey")).Length;
+
+            try
+            {
+                appConfig.FileShareStorageAccountKeyLength =
+                    (await keyVaultClient.GetSecretAsync($"{appConfig.FileShareStorageAccountNamePrefix}westeuropeStorageAccountKey")).Length;
+            }
+            catch (Exception)
+            {
+            }
         }
 
         return appConfig;

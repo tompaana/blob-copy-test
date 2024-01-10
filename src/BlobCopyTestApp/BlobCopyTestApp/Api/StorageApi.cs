@@ -26,7 +26,9 @@ public static class StorageApi
     }
 
 #pragma warning disable CA1823 // Avoid unused private fields
+#pragma warning disable IDE0051 // Remove unused private members
     private const string DefaultTimeoutInSeconds = "30";
+#pragma warning restore IDE0051 // Remove unused private members
 #pragma warning restore CA1823 // Avoid unused private fields
     private const string BlobContainerName = "copytest";
     private const string FileShareName = "copytest";
@@ -289,7 +291,7 @@ public static class StorageApi
             return copyResult;
         }
 
-        ShareFileCopyInfo? shareFileCopyInfo = null;
+        ShareFileCopyInfo? shareFileCopyInfo;
 
         try
         {
