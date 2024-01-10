@@ -1,5 +1,6 @@
 ﻿namespace BlobCopyTestApp.Api;
 
+using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using Azure;
 using Azure.Storage.Blobs.Models;
@@ -8,6 +9,7 @@ using BlobCopyTestApp.Clients;
 using BlobCopyTestApp.Models;
 using Microsoft.AspNetCore.Mvc;
 using Swashbuckle.AspNetCore.Annotations;
+using ShareFileCopyStatus = Azure.Storage.Files.Shares.Models.CopyStatus;
 
 public static class StorageApi
 {
@@ -23,6 +25,9 @@ public static class StorageApi
         FileShare = 1,
     }
 
+#pragma warning disable CA1823 // Avoid unused private fields
+    private const string DefaultTimeoutInSeconds = "30";
+#pragma warning restore CA1823 // Avoid unused private fields
     private const string BlobContainerName = "copytest";
     private const string FileShareName = "copytest";
     private const string BlobName = "test.txt";
@@ -105,13 +110,16 @@ public static class StorageApi
 
         app.MapPost("/copy",
         [SwaggerOperation(Summary = "Copies blob to file share", Description = "Copies a blob from a storage account to a file share using the given locations (regions) e.g., from \"westeurope\" to \"swedencentral\".")]
-        async ([FromQuery][Required] string sourceLocation, [FromQuery][Required] string destinationLocation) =>
+        async (
+            [FromQuery][Required] string sourceLocation,
+            [FromQuery][Required] string destinationLocation,
+            [FromQuery][DefaultValue(typeof(int), DefaultTimeoutInSeconds)] int timeoutInSeconds) =>
         {
             CopyResult copyResult;
 
             try
             {
-                copyResult = await CopyAsync(sourceLocation, destinationLocation, app.Logger);
+                copyResult = await CopyAsync(sourceLocation, destinationLocation, timeoutInSeconds, app.Logger);
             }
             catch (Exception e)
             {
@@ -126,7 +134,7 @@ public static class StorageApi
 
         app.MapPost("/copy/all",
         [SwaggerOperation(Summary = "Copies blobs to file shares", Description = "Copies a blob from a storage account to a file share using all the possible location combinations.")]
-        async () =>
+        async ([FromQuery][DefaultValue(typeof(int), DefaultTimeoutInSeconds)] int timeoutInSeconds) =>
         {
             Location[] locations = { Location.PrimaryLocation, Location.SecondaryLocation };
             IList<CopyResult> copyResults = new List<CopyResult>();
@@ -137,7 +145,7 @@ public static class StorageApi
                 {
                     try
                     {
-                        copyResults.Add(await CopyAsync(sourceLocation, destinationLocation, app.Logger));
+                        copyResults.Add(await CopyAsync(sourceLocation, destinationLocation, timeoutInSeconds, app.Logger));
                     }
                     catch (Exception e)
                     {
@@ -146,7 +154,7 @@ public static class StorageApi
                         {
                             SourceLocation = LocationEnumToString(sourceLocation),
                             DestinationLocation = LocationEnumToString(destinationLocation),
-                            CopyStatus = Azure.Storage.Files.Shares.Models.CopyStatus.Failed,
+                            CopyStatus = ShareFileCopyStatus.Failed,
                             Message = e.Message
                         });
 #pragma warning restore CS8601 // Possible null reference assignment.
@@ -231,7 +239,8 @@ public static class StorageApi
         return storageAccountContents;
     }
 
-    public static async Task<CopyResult> CopyAsync(Location sourceLocation, Location destinationLocation, ILogger logger)
+    public static async Task<CopyResult> CopyAsync(
+        Location sourceLocation, Location destinationLocation, int timeoutInSeconds, ILogger logger)
     {
         string? from = LocationEnumToString(sourceLocation);
         string? to = LocationEnumToString(destinationLocation);
@@ -241,12 +250,11 @@ public static class StorageApi
             throw new InvalidOperationException("Failed to resolve locations");
         }
 
-        return await CopyAsync(from, to, logger);
+        return await CopyAsync(from, to, timeoutInSeconds, logger);
     }
 
-    public static async Task<CopyResult> CopyAsync(string from, string to, ILogger logger)
+    public static async Task<CopyResult> CopyAsync(string from, string to, int timeoutInSeconds, ILogger logger)
     {
-
         string? blobStorageAccountNamePrefix = Environment.GetEnvironmentVariable("BLOB_STORAGE_ACCOUNT_NAME_PREFIX");
         string? fileShareStorageAccountNamePrefix = Environment.GetEnvironmentVariable("FILE_SHARE_STORAGE_ACCOUNT_NAME_PREFIX");
 
@@ -299,19 +307,48 @@ public static class StorageApi
             copyResult.StatusCode = e.Status;
             copyResult.Message = $"Failed to copy from {from} to {to}: {e.Message}";
             logger.LogError(copyResult.Message);
+            return copyResult;
         }
         catch (Exception e)
         {
             copyResult.Message = $"Failed to copy from {from} to {to}: {e.Message}";
             logger.LogError(copyResult.Message);
+            return copyResult;
         }
 
-        copyResult.CopyStatus = (shareFileCopyInfo == null)
-            ? Azure.Storage.Files.Shares.Models.CopyStatus.Failed
-            : shareFileCopyInfo.CopyStatus;
+        if (shareFileCopyInfo == null)
+        {
+            copyResult.CopyStatus = ShareFileCopyStatus.Failed;
+            copyResult.Message = "Something went wrong";
+            logger.LogError(copyResult.Message);
+            return copyResult;
+        }
 
-        copyResult.StatusCode = 201;
-        copyResult.Message = "Copy operation appears successful or was successfully started";
+        copyResult.CopyStatus = shareFileCopyInfo.CopyStatus;
+        copyResult.Message = $"Start copy operation succeeded with status: {CopyStatusToString(copyResult.CopyStatus)}";
+        logger.LogInformation(copyResult.Message);
+        DateTime then = DateTime.UtcNow;
+
+        while (copyResult.CopyStatus == ShareFileCopyStatus.Pending
+            && DateTime.UtcNow < then.AddSeconds(timeoutInSeconds))
+        {
+            ShareFileProperties shareFileProperties = await StorageClient.GetFilePropertiesAsync(
+                fileShareStorageAccountName,
+                fileShareStorageAccountKey,
+                FileShareName,
+                destinationFilePath);
+
+            if (shareFileProperties.CopyStatus != ShareFileCopyStatus.Pending)
+            {
+                copyResult.CopyStatus = shareFileProperties.CopyStatus;
+                copyResult.Message = $"Copy operation finished with status: {CopyStatusToString(copyResult.CopyStatus)}";
+            }
+            else
+            {
+                logger.LogInformation("Copy operation of file {filePath} still pending", destinationFilePath);
+            }
+        }
+
         logger.LogInformation(copyResult.Message);
         return copyResult;
     }
@@ -339,5 +376,17 @@ public static class StorageApi
         }
 
         return storageAccountNames;
+    }
+
+    private static string CopyStatusToString(ShareFileCopyStatus copyStatus)
+    {
+        switch (copyStatus)
+        {
+            case ShareFileCopyStatus.Pending: return "pending";
+            case ShareFileCopyStatus.Success: return "success";
+            case ShareFileCopyStatus.Aborted: return "aborted";
+            case ShareFileCopyStatus.Failed: return "failed";
+            default: return $"unhandled status ({copyStatus})";
+        }
     }
 }

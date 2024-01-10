@@ -75,6 +75,18 @@ public class StorageClient
         return filePaths;
     }
 
+    public static async Task<ShareFileProperties> GetFilePropertiesAsync(
+        string storageAccountName,
+        string storageAccountKey,
+        string shareName,
+        string filePath)
+    {
+        Uri shareFileUri = new($"https://{storageAccountName}.file.core.windows.net/{shareName}/{filePath}");
+        StorageSharedKeyCredential credential = new(storageAccountName, storageAccountKey);
+        ShareFileClient shareFileClient = new ShareFileClient(shareFileUri, credential);
+        return await shareFileClient.GetPropertiesAsync();
+    }
+
     public static bool DeleteBlob(string storageAccountName, string containerName, string blobName, string? storageAccountKey = null)
     {
         BlobContainerClient blobContainerClient = GetBlobContainerClient(storageAccountName, containerName, storageAccountKey);
