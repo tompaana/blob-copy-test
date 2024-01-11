@@ -6,7 +6,7 @@
 >
 > *Viewer discretion is advised.*
 
-The solution will deploy two, peered virtual networks in different locations (`westeurope` and `swedencentral`) both containing a blob storage and a file share storage so 4 storage accounts in total. None of the storages allow public internet access, but use private endpoints instead. A very simple app service with a Swagger UI is provided to test copying blobs from different accounts to different file shares.
+The solution will deploy two, peered virtual networks in different locations (`westeurope` and `swedencentral`) both containing a blob storage and a file share storage; 4 storage accounts in total. None of the storages allow public internet access, but use private endpoints instead. A very simple app service with a Swagger UI is provided to test copying blobs from different accounts to different file shares.
 
 ## Prerequisites
 
@@ -15,7 +15,7 @@ The solution will deploy two, peered virtual networks in different locations (`w
 * [PowerShell](https://learn.microsoft.com/powershell/scripting/install/installing-powershell)
 * [.NET 6](https://dotnet.microsoft.com/download/dotnet/6.0)
 
-Tested in Windows with Azure CLI version 2.46.0.
+Tested in Windows with Azure CLI version 2.56.0.
 
 ## Scripts to install/deploy
 
@@ -94,6 +94,8 @@ All the scripts are (more or less) idempotent. Note that in most cases the scrip
 
 > **Note** *) Workaround
 >
-> Add IP ranges of Azure storage accounts in `westeurope` to the firewall rules of the blob storage account in `swedencentral` ("`stctb<meronym>devswedencentral`") to allow access.
+> Add IP ranges of Azure storage accounts in `westeurope` to the firewall rules of the copy-source blob storage account in `swedencentral` ("`stctb<meronym>devswedencentral`") to allow access.
 >
 > You can find the ranges at [Azure IP Ranges site](https://azureipranges.azurewebsites.net/). Enter "`Storage.WestEurope`" to the search box.
+>
+> `/scripts/New-StorageIpRules.ps1` script is provided to automate this workaround. See the documentation in the script file to understand the required parameters.
