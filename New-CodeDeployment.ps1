@@ -47,7 +47,7 @@ if ($NoBuild -or $NoPackage) {
     Write-Output "`nRestoring packages..."
     dotnet restore $AppServiceCodeSolutionPath --interactive
 
-    Write-Output "`nBuilding source..."
+    Write-Output "`nBuilding source (${AppServiceCodeSolutionPath})..."
 
     dotnet publish $AppServiceCodeSolutionPath `
         --configuration $BuildConfiguration `
@@ -57,6 +57,11 @@ if ($NoBuild -or $NoPackage) {
 if ($NoPackage) {
     Write-Output "`nSkipping package built source step..."
 } else {
+    if (Test-Path $AppServiceCodeZipPackagePath) {
+        Write-Output "`nDeleting old package..."
+        Remove-Item $AppServiceCodeZipPackagePath
+    }
+
     Write-Output "`nPackaging built code..."
 
     Compress-Archive `

@@ -3,30 +3,10 @@
 param storageAccountName string
 
 param location string = resourceGroup().location
-param skuName string = 'Standard_LRS'
 
-@allowed([
-  'FileStorage'
-  'StorageV2'
-])
-param kind string
+param skuName string = 'Standard_GRS'
 
-param allowSharedKeyAccess bool
-
-@maxLength(24)
-@description('If given, will store the storage account key in the Key Vault.')
-param keyVaultName string = ''
-
-param vnetEnabled bool
-
-@maxLength(90)
-param vnetResourceGroupName string
-
-@maxLength(64)
-param vnetName string
-
-@maxLength(80)
-param subnetName string
+param kind string = 'StorageV2'
 
 @allowed([
   'blob'
@@ -34,16 +14,51 @@ param subnetName string
   'queue'
   'table'
 ])
-param groupIds array
+param services array = [ 'blob' ]
 
-var privateDnsZoneNames = [for groupId in groupIds: 'privatelink.${groupId}.${environment().suffixes.storage}']
+param allowSharedKeyAccess bool = false
 
-resource virtualNetwork 'Microsoft.Network/virtualNetworks@2022-01-01' existing = if (vnetEnabled) {
+param managementPolicyProperties object = {}
+
+@maxLength(24)
+@description('If given, will attempt to store the storage account key as a secret in the Key Vault')
+param keyVaultName string = ''
+
+param privateNetworkEnabled bool
+
+@allowed([
+  'privateEndpoint'
+  'serviceEndpoint'
+])
+param privateConnectivityMethod string = 'privateEndpoint'
+
+@minLength(1)
+@maxLength(90)
+param vnetResourceGroupName string = resourceGroup().location
+
+@maxLength(64)
+param vnetName string = ''
+
+@maxLength(80)
+param subnetName string = ''
+
+@minLength(1)
+@maxLength(90)
+param privateDnsZoneResourceGroupName string = resourceGroup().name
+
+var serviceProperties = {
+  enabled: true
+  keyType: 'Account'
+}
+
+var privateDnsZoneNames = [for groupId in services: 'privatelink.${groupId}.${environment().suffixes.storage}']
+
+resource virtualNetwork 'Microsoft.Network/virtualNetworks@2023-04-01' existing = if (privateNetworkEnabled) {
   name: vnetName
   scope: resourceGroup(vnetResourceGroupName)
 }
 
-resource storageAccount 'Microsoft.Storage/storageAccounts@2021-06-01' = {
+resource storageAccount 'Microsoft.Storage/storageAccounts@2022-05-01' = {
   name: storageAccountName
   location: location
 
@@ -54,29 +69,23 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2021-06-01' = {
   kind: kind
 
   identity: {
-    type: 'None'
+    type: 'SystemAssigned'
   }
 
   properties: {
     accessTier: 'Hot'
     allowBlobPublicAccess: false
-    allowCrossTenantReplication: true
+    allowCrossTenantReplication: false
     allowSharedKeyAccess: allowSharedKeyAccess
-    defaultToOAuthAuthentication: false
 
     encryption: {
       keySource: 'Microsoft.Storage'
 
       services: {
-        blob: {
-          enabled: true
-          keyType: 'Account'
-        }
-
-        file: {
-          enabled: true
-          keyType: 'Account'
-        }
+        blob: contains(services, 'blob') ? serviceProperties : {}
+        file: contains(services, 'file') ? serviceProperties : {}
+        queue: contains(services, 'queue') ? serviceProperties : {}
+        table: contains(services, 'table') ? serviceProperties : {}
       }
     }
 
@@ -84,10 +93,10 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2021-06-01' = {
 
     networkAcls: {
       bypass: 'AzureServices'
-      defaultAction: (vnetEnabled) ? 'Deny' : 'Allow'
+      defaultAction: privateNetworkEnabled ? 'Deny' : 'Allow'
       ipRules: []
 
-      virtualNetworkRules: (vnetEnabled) ? [
+      virtualNetworkRules: privateNetworkEnabled && privateConnectivityMethod == 'serviceEndpoint' ? [
         {
           id: '${virtualNetwork.id}/subnets/${subnetName}'
           action: 'Allow'
@@ -100,28 +109,56 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2021-06-01' = {
   }
 }
 
-module keyVaultSecret './key-vault-secret.bicep' =  if (!empty(keyVaultName))  {
-  name: '${storageAccountName}keyVaultSecret'
-
-  params: {
-    keyVaultName: keyVaultName
-    secretName: '${storageAccountName}Key'
-    secretValue: storageAccount.listKeys().keys[0].value
-  }
-}
-
-// Sweden Central does not support advanced threat protection settings for storage accounts as of writing this 2022-10-20
-resource advancedThreatProtectionSettings 'Microsoft.Security/advancedThreatProtectionSettings@2019-01-01' = if (location != 'swedencentral') {
-  name: 'current'
-  scope: storageAccount
+resource blobService 'Microsoft.Storage/storageAccounts/blobServices@2022-09-01' = if (contains(services, 'blob')) {
+  name: 'default'
+  parent: storageAccount
 
   properties: {
-    isEnabled: true
+    changeFeed: {
+      enabled: false
+    }
+
+    containerDeleteRetentionPolicy: {
+      days: 7
+      enabled: true
+    }
+
+    cors: {
+      corsRules: []
+    }
+
+    deleteRetentionPolicy: {
+      allowPermanentDelete: false
+      days: 7
+      enabled: true
+    }
+
+    isVersioningEnabled: false
+
+    restorePolicy: {
+      enabled: false
+    }
   }
 }
 
-module privateEndpoints './private-endpoint.bicep' = [for (privateDnsZoneName, i) in privateDnsZoneNames: if (vnetEnabled) {
-  name: '${storageAccountName}${groupIds[i]}PrivateEndpoint'
+resource queueService 'Microsoft.Storage/storageAccounts/queueServices@2022-09-01' = if (contains(services, 'queue')) {
+  name: 'default'
+  parent: storageAccount
+}
+
+resource tableService 'Microsoft.Storage/storageAccounts/tableServices@2022-09-01' = if (contains(services, 'table')) {
+  name: 'default'
+  parent: storageAccount
+}
+
+resource managementPolicies 'Microsoft.Storage/storageAccounts/managementPolicies@2022-09-01' = if (!empty(managementPolicyProperties)) {
+  name: 'default'
+  parent: storageAccount
+  properties: managementPolicyProperties
+}
+
+module privateEndpoints './private-endpoint.bicep' = [for (privateDnsZoneName, i) in privateDnsZoneNames: if (privateNetworkEnabled && privateConnectivityMethod == 'privateEndpoint') {
+  name: '${storageAccountName}${services[i]}PrivateEndpoint'
 
   params: {
     serviceName: storageAccountName
@@ -130,10 +167,21 @@ module privateEndpoints './private-endpoint.bicep' = [for (privateDnsZoneName, i
     vnetResourceGroupName: vnetResourceGroupName
     vnetName: vnetName
     subnetName: subnetName
-    groupId: groupIds[i]
+    groupId: services[i]
+    #disable-next-line BCP334
     privateDnsZoneName: privateDnsZoneName
+    privateDnsZoneResourceGroupName: privateDnsZoneResourceGroupName
   }
 }]
 
-@description('The resource ID of the storage account.')
-output storageAccountResourceId string = storageAccount.id
+module storageAccountKeySecret './key-vault-secret.bicep' = if (!empty(keyVaultName)) {
+  name: '${storageAccountName}StorageAccountKey'
+
+  params: {
+    keyVaultName: keyVaultName
+    secretName: '${storageAccountName}StorageAccountKey'
+    secretValue: storageAccount.listKeys().keys[0].value
+  }
+}
+
+output storageAccountId string = storageAccount.id

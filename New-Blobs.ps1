@@ -6,7 +6,7 @@
 #       -ResourceNameMeronym <resource name meronym> `
 #       -Environment <environment {dev, test, prod}, default is "dev">
 #
-# Tested to work with Azure CLI version 2.46.0
+# Tested to work with Azure CLI version 2.56.0
 
 Param(
     [Parameter(Mandatory, HelpMessage="Resource name meronym (lowercase alphanumeric, max length 2)")][string]$ResourceNameMeronym,

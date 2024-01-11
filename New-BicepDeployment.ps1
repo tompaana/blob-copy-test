@@ -7,14 +7,16 @@
 #       -Environment <environment {dev, test, prod}, default is "dev"> `
 #       -SubscriptionId `  # If not given, the script will attempt to retrieve it
 #       -UserObjectId  # If not given, the script will attempt to retrieve it
+#       {-UseServiceEndpoints}
 #
-# Tested to work with Azure CLI version 2.46.0
+# Tested to work with Azure CLI version 2.56.0
 
 Param(
     [Parameter(Mandatory, HelpMessage="Resource name meronym (lowercase alphanumeric, max length 2)")][string]$ResourceNameMeronym,
     [string]$Environment = "dev",
     [string]$SubscriptionId = "",
-    [string]$UserObjectId = ""
+    [string]$UserObjectId = "",
+    [switch]$UseServiceEndpoints
 )
 
 $ErrorActionPreference = "Stop"
@@ -70,10 +72,16 @@ Write-Output "  - Resource name meronym: ${ResourceNameMeronym}"
 Write-Output "  - Environment: ${Environment}"
 Write-Output "  - Subscription ID: ${SubscriptionId}"
 Write-Output "  - User object ID: ${UserObjectId}"
+Write-Output "  - Using service endpoints instead of private endpoints: ${UseServiceEndpoints}"
 
 $ResourceGroupName = "rg-copytest${ResourceNameMeronym}-${Environment}"
 $Location = "westeurope"
 $PrincipalType = "User"
+$StorageAccountPrivateConnectivityMethod = "privateEndpoint"
+
+if ($UseServiceEndpoints -Eq $True) {
+    $StorageAccountPrivateConnectivityMethod = "serviceEndpoint"
+}
 
 Write-Output "`nCreating resource group ${ResourceGroupName}..."
 
@@ -98,4 +106,5 @@ az deployment group create `
     --parameters `
         environmentAbbreviated=$Environment `
         resourceNameMeronym=$ResourceNameMeronym `
-        userObjectId=$UserObjectId
+        userObjectId=$UserObjectId `
+        storageAccountPrivateConnectivityMethod=$StorageAccountPrivateConnectivityMethod

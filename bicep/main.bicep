@@ -10,17 +10,32 @@ param environmentAbbreviated string = 'dev'
 param resourceNameMeronym string
 
 @minLength(36)
-@maxLength(38)
+@maxLength(36)
 @description('The object ID of the user deploying this template. Will be used for role assignments.')
 param userObjectId string
 
+@allowed([
+  'privateEndpoint'
+  'serviceEndpoint'
+])
+param storageAccountPrivateConnectivityMethod string = 'privateEndpoint'
+
+param primaryLocation string = 'westeurope'
+param secondaryLocation string = 'swedencentral'
+
 var locations = [
-  'westeurope'
-  'swedencentral'
+  primaryLocation
+  secondaryLocation
+]
+
+var privateDnsZoneNames = [
+  'privatelink.azurewebsites.net'
+  'privatelink.blob.${environment().suffixes.storage}'
+  'privatelink.file.${environment().suffixes.storage}'
+  'privatelink.vaultcore.azure.net'
 ]
 
 var coreLocation = locations[0]
-var vnetResourceGroupName = resourceGroup().name
 var vnetNames = [for location in locations: 'vnet-copytest${resourceNameMeronym}-${environmentAbbreviated}-${location}']
 var coreVnetName = 'vnet-copytest${resourceNameMeronym}-${environmentAbbreviated}-${coreLocation}'
 var sharedSubnetNamePrefix = 'snet-copytest${resourceNameMeronym}-shared-${environmentAbbreviated}'
@@ -32,8 +47,16 @@ var blobStorageAccountNamePrefix = 'stctb${resourceNameMeronym}${environmentAbbr
 var blobContainerName = 'copytest'
 var fileShareStorageAccountNamePrefix = 'stctf${resourceNameMeronym}${environmentAbbreviated}'
 var fileShareName = blobContainerName
-var appServicePlanName = 'plan-${coreResourceNameSuffix}'
+var appServicePlanName = 'asp-${coreResourceNameSuffix}'
 var appServiceName = 'app-${coreResourceNameSuffix}'
+
+module privateDnsZones './private-dns-zones.bicep' = {
+  name: 'privateDnsZones'
+
+  params: {
+    privateDnsZoneNames: privateDnsZoneNames
+  }
+}
 
 module virtualNetworks './virtual-network.bicep' = [for (location, i) in locations: {
   name: 'virtualNetwork-${location}'
@@ -57,14 +80,19 @@ module virtualNetworks './virtual-network.bicep' = [for (location, i) in locatio
         properties: {
           addressPrefix: '10.0.1.0/24'
 
-          serviceEndpoints: [
+          serviceEndpoints: (storageAccountPrivateConnectivityMethod == 'privateEndpoint') ? [
+            {
+              locations: [ location ]
+              service: 'Microsoft.KeyVault'
+            }
+          ] : [
             {
               locations: [ location ]
               service: 'Microsoft.KeyVault'
             }
             {
               locations: [ location ]
-              service: 'Microsoft.Storage'
+              service: 'Microsoft.Storage.Global'
             }
           ]
 
@@ -101,14 +129,19 @@ module virtualNetworks './virtual-network.bicep' = [for (location, i) in locatio
         properties: {
           addressPrefix: '10.0.4.0/24'
 
-          serviceEndpoints: [
+          serviceEndpoints: (storageAccountPrivateConnectivityMethod == 'privateEndpoint') ? [
+            {
+              locations: [ location ]
+              service: 'Microsoft.KeyVault'
+            }
+          ] : [
             {
               locations: [ location ]
               service: 'Microsoft.KeyVault'
             }
             {
               locations: [ location ]
-              service: 'Microsoft.Storage'
+              service: 'Microsoft.Storage.Global'
             }
           ]
 
@@ -118,6 +151,22 @@ module virtualNetworks './virtual-network.bicep' = [for (location, i) in locatio
       }
     ]
   }
+
+  dependsOn: [ privateDnsZones ]
+}]
+
+module virtualNetworkLinks './virtual-network-links.bicep' = [for (location, i) in locations: {
+  name: 'virtualNetworkLinks-${location}'
+
+  params: {
+    vnetName: vnetNames[i]
+    privateDnsZoneNames: privateDnsZoneNames
+  }
+
+  dependsOn: [
+    privateDnsZones
+    virtualNetworks
+  ]
 }]
 
 module virtualNetworkPeerings './virtual-network-peerings.bicep' = {
@@ -131,30 +180,19 @@ module virtualNetworkPeerings './virtual-network-peerings.bicep' = {
   dependsOn: [ virtualNetworks ]
 }
 
-module privateDnsZones './private-dns-zones.bicep' = {
-  name: 'privateDnsZones'
-
-  params: {
-    vnetResourceGroupName: resourceGroup().name
-    vnetName: coreVnetName
-  }
-
-  dependsOn: [ virtualNetworks ]
-}
-
 module keyVault './key-vault.bicep' = {
   name: 'keyVault'
 
   params: {
     keyVaultName: keyVaultName
     location: coreLocation
-    vnetEnabled: true
-    vnetResourceGroupName: vnetResourceGroupName
+    enableSoftDelete: false
+    privateNetworkEnabled: true
     vnetName: coreVnetName
     subnetName: coreSharedSubnetName
   }
 
-  dependsOn: [ privateDnsZones ]
+  dependsOn: [ virtualNetworks ]
 }
 
 module keyVaultRoleAssignmentsForUser './key-vault-role-assignments.bicep' = {
@@ -164,6 +202,10 @@ module keyVaultRoleAssignmentsForUser './key-vault-role-assignments.bicep' = {
     keyVaultName: keyVaultName
     principalObjectId: userObjectId
     principalType: 'User'
+
+    roles: [
+      'b86a8fe4-44ce-4948-aee5-eccb2c155cd7' // Key Vault Secrets Officer
+    ]
   }
 
   dependsOn: [ keyVault ]
@@ -177,16 +219,14 @@ module blobStorageAccounts './storage-account.bicep' = [for (location, i) in loc
     location: location
     skuName: 'Standard_LRS'
     kind: 'StorageV2'
+    services: [ 'blob' ]
     keyVaultName: keyVaultName
     allowSharedKeyAccess: true
-    vnetEnabled: true
-    vnetResourceGroupName: vnetResourceGroupName
+    privateNetworkEnabled: true
+    privateConnectivityMethod: storageAccountPrivateConnectivityMethod
+    vnetResourceGroupName: resourceGroup().name
     vnetName: vnetNames[i]
     subnetName: '${sharedSubnetNamePrefix}-${location}'
-
-    groupIds: [
-      'blob'
-    ]
   }
 
   dependsOn: [ keyVaultRoleAssignmentsForUser ]
@@ -200,7 +240,7 @@ module blobStorageAccountRoleAssignmentsForUser './storage-account-role-assignme
     principalObjectId: userObjectId
     principalType: 'User'
 
-    roleDefinitionIds: [
+    roles: [
       'ba92f5b4-2d11-453d-a403-e96b0029c9fe' // Storage Blob Data Contributor
     ]
   }
@@ -212,8 +252,9 @@ module blobContainers './storage-blob-container.bicep' = [for location in locati
   name: 'blobContainer-${location}'
 
   params: {
-    containerName: blobContainerName
+    storageBlobContainerName: blobContainerName
     storageAccountName: '${blobStorageAccountNamePrefix}${location}'
+    enableSoftDelete: false
   }
 
   dependsOn: [ blobStorageAccounts ]
@@ -227,16 +268,14 @@ module fileShareStorageAccounts './storage-account.bicep' = [for (location, i) i
     location: location
     skuName: 'Premium_LRS'
     kind: 'FileStorage'
+    services: [ 'file' ]
     keyVaultName: keyVaultName
     allowSharedKeyAccess: true
-    vnetEnabled: true
-    vnetResourceGroupName: vnetResourceGroupName
+    privateNetworkEnabled: true
+    privateConnectivityMethod: storageAccountPrivateConnectivityMethod
+    vnetResourceGroupName: resourceGroup().name
     vnetName: vnetNames[i]
     subnetName: '${sharedSubnetNamePrefix}-${location}'
-
-    groupIds: [
-      'file'
-    ]
   }
 
   dependsOn: [ keyVaultRoleAssignmentsForUser ]
@@ -250,7 +289,7 @@ module fileShareStorageAccountRoleAssignmentsForUser './storage-account-role-ass
     principalObjectId: userObjectId
     principalType: 'User'
 
-    roleDefinitionIds: [
+    roles: [
       '0c867c2a-1d8c-454a-a3db-ab2ea1bdc8bb' // Storage File Data SMB Share Contributor
     ]
   }
@@ -284,10 +323,10 @@ module appService './app-service.bicep' = {
 
   params: {
     appServiceName: appServiceName
-    appServicePlanId: appServicePlan.outputs.appServicePlanId
+    serverFarmId: appServicePlan.outputs.appServicePlanId
     location: coreLocation
     allowPublicNetworkAccess: true
-    vnetEnabled: true
+    privateNetworkEnabled: true
 
     siteConfig: {
       linuxFxVersion: 'DOTNETCORE|6.0'
@@ -295,15 +334,14 @@ module appService './app-service.bicep' = {
       http20Enabled: true
     }
 
-    vnetResourceGroupName: resourceGroup().name
     vnetName: coreVnetName
     subnetName: appsSubnetName
     privateEndpointSubnetName: coreSharedSubnetName
   }
 
   dependsOn: [
+    virtualNetworks
     appServicePlan
-    privateDnsZones
   ]
 }
 
@@ -312,8 +350,12 @@ module keyVaultRoleAssignmentsForAppService './key-vault-role-assignments.bicep'
 
   params: {
     keyVaultName: keyVaultName
-    principalObjectId: appService.outputs.appServiceIdentityPrincipalObjectId
+    principalObjectId: appService.outputs.identityPrincipalObjectId
     principalType: 'ServicePrincipal'
+
+    roles: [
+      '4633458b-17de-408a-b874-0445c86b69e6' // Key Vault Secrets User
+    ]
   }
 
   dependsOn: [
@@ -327,10 +369,10 @@ module blobStorageAccountRoleAssignmentsForAppService './storage-account-role-as
 
   params: {
     storageAccountName: '${blobStorageAccountNamePrefix}${location}'
-    principalObjectId: appService.outputs.appServiceIdentityPrincipalObjectId
+    principalObjectId: appService.outputs.identityPrincipalObjectId
     principalType: 'ServicePrincipal'
 
-    roleDefinitionIds: [
+    roles: [
       'ba92f5b4-2d11-453d-a403-e96b0029c9fe' // Storage Blob Data Contributor
     ]
   }
@@ -346,10 +388,10 @@ module fileShareStorageAccountRoleAssignmentsForAppService './storage-account-ro
 
   params: {
     storageAccountName: '${fileShareStorageAccountNamePrefix}${location}'
-    principalObjectId: appService.outputs.appServiceIdentityPrincipalObjectId
+    principalObjectId: appService.outputs.identityPrincipalObjectId
     principalType: 'ServicePrincipal'
 
-    roleDefinitionIds: [
+    roles: [
       '0c867c2a-1d8c-454a-a3db-ab2ea1bdc8bb' // Storage File Data SMB Share Contributor
     ]
   }
@@ -366,18 +408,17 @@ module appServiceSettings './app-service-settings.bicep' = {
   params: {
     appServiceName: appServiceName
 
-    newAppSettingsConfigProperties: {
+    appSettingsProperties: {
       ASPNETCORE_ENVIRONMENT: 'Development'
       WEBSITE_NODE_DEFAULT_VERSION: '6.9.1'
+      PRIMARY_LOCATION: primaryLocation
+      SECONDARY_LOCATION: secondaryLocation
       KEY_VAULT_NAME: keyVaultName
       BLOB_STORAGE_ACCOUNT_NAME_PREFIX: blobStorageAccountNamePrefix
       FILE_SHARE_STORAGE_ACCOUNT_NAME_PREFIX: fileShareStorageAccountNamePrefix
+      PRIVATE_CONNECTIVITY_METHOD: storageAccountPrivateConnectivityMethod
     }
-
-    existingAppSettingsConfigProperties: {}
   }
 
-  dependsOn: [
-    appService
-  ]
+  dependsOn: [ appService ]
 }

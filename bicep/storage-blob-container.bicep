@@ -1,49 +1,43 @@
-@minLength(1)
-@maxLength(1024)
-param containerName string
-
 @minLength(3)
 @maxLength(24)
 param storageAccountName string
 
-resource storageAccount 'Microsoft.Storage/storageAccounts@2022-05-01' existing = {
+@minLength(3)
+@maxLength(63)
+param storageBlobContainerName string
+
+param enableSoftDelete bool = true
+
+resource storageAccount 'Microsoft.Storage/storageAccounts@2022-09-01' existing = {
   name: storageAccountName
 }
 
-resource blobService 'Microsoft.Storage/storageAccounts/blobServices@2022-05-01' = {
-  name: 'default'
+resource blobService 'Microsoft.Storage/storageAccounts/blobServices@2022-09-01' = {
   parent: storageAccount
+  name: 'default'
 
   properties: {
-    changeFeed: {
-      enabled: false
-    }
-
-    containerDeleteRetentionPolicy: {
-      days: 7
-      enabled: true
-    }
-
     cors: {
       corsRules: []
     }
 
     deleteRetentionPolicy: {
-      allowPermanentDelete: false
+      enabled: enableSoftDelete
       days: 7
-      enabled: true
     }
 
-    isVersioningEnabled: false
-
-    restorePolicy: {
-      enabled: false
+    containerDeleteRetentionPolicy: {
+      enabled: enableSoftDelete
+      days: 7
     }
   }
 }
 
-resource container 'Microsoft.Storage/storageAccounts/blobServices/containers@2022-05-01' = {
-  name: containerName
+resource blobContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2022-09-01' = {
   parent: blobService
-  properties: {}
+  name: storageBlobContainerName
+
+  properties: {
+    publicAccess: 'None'
+  }
 }

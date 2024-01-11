@@ -9,7 +9,6 @@ param secretValue string
 @maxLength(24)
 param keyVaultName string
 
-
 resource keyVault 'Microsoft.KeyVault/vaults@2022-07-01' existing = {
   name: keyVaultName
 }

@@ -4,10 +4,6 @@ param appServiceName string
 
 param location string = resourceGroup().location
 
-@description('The resource ID of the App Service plan to host the app in.')
-param appServicePlanId string
-
-// For more information on App Service kind, see https://github.com/Azure/app-service-linux-docs/blob/master/Things_You_Should_Know/kind_property.md
 @allowed([
   'app'
   'app,linux'
@@ -17,35 +13,64 @@ param appServicePlanId string
   'functionapp'
   'functionapp,linux'
 ])
-param appServiceKind string = 'app'
+param kind string = 'app,linux'
+
+param serverFarmId string
+
+@maxLength(63)
+param logAnalyticsWorkspaceName string = ''
 
 param allowPublicNetworkAccess bool
 
-param vnetEnabled bool
-
-@maxLength(90)
-param vnetResourceGroupName string
-
-@maxLength(64)
-param vnetName string
-
-@maxLength(80)
-param subnetName string
-
-@maxLength(80)
-param privateEndpointSubnetName string = subnetName
+param privateNetworkEnabled bool
 
 param siteConfig object = {
-  vnetRouteAllEnabled: vnetEnabled ? true : null
+  vnetRouteAllEnabled: privateNetworkEnabled ? true : null
   http20Enabled: true
 }
 
-resource appSettingsConfig 'Microsoft.Web/sites/config@2022-03-01' existing = {
-  name: 'appsettings'
-  parent: appService
+@maxLength(90)
+param vnetResourceGroupName string = resourceGroup().name
+
+@maxLength(64)
+param vnetName string = ''
+
+@maxLength(80)
+@description('This subnet must be delegated to Microsoft.Web/serverFarms')
+param subnetName string = ''
+
+@maxLength(80)
+param privateEndpointSubnetName string = ''
+
+@minLength(1)
+@maxLength(90)
+param privateDnsZoneResourceGroupName string = resourceGroup().name
+
+var appServiceLogs = kind != 'functionapp,linux' ? [
+  {
+    category: 'AppServiceHTTPLogs'
+    enabled: true
+  }
+  {
+    category: 'AppServiceAppLogs'
+    enabled: true
+  }
+  {
+    category: 'AppServiceAuditLogs'
+    enabled: true
+  }
+] : [
+  {
+    category: 'FunctionAppLogs'
+    enabled: true
+  }
+]
+
+resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2022-10-01' existing = if (!empty(logAnalyticsWorkspaceName)) {
+  name: logAnalyticsWorkspaceName
 }
 
-resource virtualNetwork 'Microsoft.Network/virtualNetworks@2022-01-01' existing = if (vnetEnabled) {
+resource virtualNetwork 'Microsoft.Network/virtualNetworks@2023-04-01' existing = if (privateNetworkEnabled) {
   name: vnetName
   scope: resourceGroup(vnetResourceGroupName)
 }
@@ -53,27 +78,41 @@ resource virtualNetwork 'Microsoft.Network/virtualNetworks@2022-01-01' existing 
 resource appService 'Microsoft.Web/sites@2022-03-01' = {
   name: appServiceName
   location: location
-  kind: appServiceKind
+  kind: kind
 
   identity: {
     type: 'SystemAssigned'
   }
 
   properties: {
-    clientAffinityEnabled: false
-    clientCertEnabled: false
     enabled: true
-    hostNamesDisabled: false
     httpsOnly: true
     publicNetworkAccess: allowPublicNetworkAccess ? 'Enabled' : 'Disabled'
-    reserved: false
-    serverFarmId: appServicePlanId
+    serverFarmId: serverFarmId
     siteConfig: siteConfig
-    virtualNetworkSubnetId: vnetEnabled ? '${virtualNetwork.id}/subnets/${subnetName}' : null
+    virtualNetworkSubnetId: privateNetworkEnabled ? '${virtualNetwork.id}/subnets/${subnetName}' : null
   }
 }
 
-module privateEndpoint './private-endpoint.bicep' = if (vnetEnabled) {
+resource diagnosticSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = if (!empty(logAnalyticsWorkspaceName)) {
+  name: 'ds-${appServiceName}'
+  scope: appService
+
+  properties: {
+    logs: appServiceLogs
+
+    metrics: [
+      {
+        category: 'AllMetrics'
+        enabled: true
+      }
+    ]
+
+    workspaceId: logAnalyticsWorkspace.id
+  }
+}
+
+module privateEndpoint './private-endpoint.bicep' = if (privateNetworkEnabled) {
   name: '${appServiceName}PrivateEndpoint'
 
   params: {
@@ -85,13 +124,8 @@ module privateEndpoint './private-endpoint.bicep' = if (vnetEnabled) {
     subnetName: privateEndpointSubnetName
     groupId: 'sites'
     privateDnsZoneName: 'privatelink.azurewebsites.net'
+    privateDnsZoneResourceGroupName: privateDnsZoneResourceGroupName
   }
 }
 
-output appServiceResourceId string = appService.id
-
-@description('The object ID of the system assigned service principal of the App Service.')
-output appServiceIdentityPrincipalObjectId string = appService.identity.principalId
-
-#disable-next-line outputs-should-not-contain-secrets
-output appSettingConfig object = appSettingsConfig.list()
+output identityPrincipalObjectId string = appService.identity.principalId
