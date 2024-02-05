@@ -11,8 +11,15 @@ param resourceNameMeronym string
 
 @minLength(36)
 @maxLength(36)
-@description('The object ID of the user deploying this template. Will be used for role assignments.')
-param userObjectId string
+@description('The object ID of the user or ops service principal deploying this template. Will be used for role assignments.')
+param opsObjectId string
+
+@allowed([
+  'ServicePrincipal'
+  'User'
+])
+param opsObjectIdType string = 'User'
+
 
 @allowed([
   'privateEndpoint'
@@ -23,12 +30,18 @@ param storageAccountPrivateConnectivityMethod string = 'privateEndpoint'
 param primaryLocation string = 'westeurope'
 param secondaryLocation string = 'swedencentral'
 
+@description('If given, a container registry will be provisioned and the web app will attempt to automatically pull the image from there.')
+param appContainerImageName string = ''
+
+var appContainerImageTag = 'latest'
+
 var locations = [
   primaryLocation
   secondaryLocation
 ]
 
 var privateDnsZoneNames = [
+  'privatelink.azurecr.io'
   'privatelink.azurewebsites.net'
   'privatelink.blob.${environment().suffixes.storage}'
   'privatelink.file.${environment().suffixes.storage}'
@@ -47,6 +60,8 @@ var blobStorageAccountNamePrefix = 'stctb${resourceNameMeronym}${environmentAbbr
 var blobContainerName = 'copytest'
 var fileShareStorageAccountNamePrefix = 'stctf${resourceNameMeronym}${environmentAbbreviated}'
 var fileShareName = blobContainerName
+var containerRegistryName = 'cr${resourceNameMeronym}${environmentAbbreviated}'
+var containerImage = empty(appContainerImageName) ? '' : '${containerRegistryName}.azurecr.io/${appContainerImageName}:${appContainerImageTag}'
 var appServicePlanName = 'asp-${coreResourceNameSuffix}'
 var appServiceName = 'app-${coreResourceNameSuffix}'
 
@@ -195,13 +210,13 @@ module keyVault './key-vault.bicep' = {
   dependsOn: [ virtualNetworks ]
 }
 
-module keyVaultRoleAssignmentsForUser './key-vault-role-assignments.bicep' = {
-  name: 'keyVaultRoleAssignmentsForUser'
+module keyVaultRoleAssignmentsForOps './key-vault-role-assignments.bicep' = {
+  name: 'keyVaultRoleAssignmentsForOps'
 
   params: {
     keyVaultName: keyVaultName
-    principalObjectId: userObjectId
-    principalType: 'User'
+    principalObjectId: opsObjectId
+    principalType: opsObjectIdType
 
     roles: [
       'b86a8fe4-44ce-4948-aee5-eccb2c155cd7' // Key Vault Secrets Officer
@@ -229,16 +244,16 @@ module blobStorageAccounts './storage-account.bicep' = [for (location, i) in loc
     subnetName: '${sharedSubnetNamePrefix}-${location}'
   }
 
-  dependsOn: [ keyVaultRoleAssignmentsForUser ]
+  dependsOn: [ keyVaultRoleAssignmentsForOps ]
 }]
 
-module blobStorageAccountRoleAssignmentsForUser './storage-account-role-assignments.bicep' = [for location in locations: {
-  name: 'blobStorageAccountRoleAssignmentsForUser-${location}'
+module blobStorageAccountRoleAssignmentsForOps './storage-account-role-assignments.bicep' = [for location in locations: {
+  name: 'blobStorageAccountRoleAssignmentsForOps-${location}'
 
   params: {
     storageAccountName: '${blobStorageAccountNamePrefix}${location}'
-    principalObjectId: userObjectId
-    principalType: 'User'
+    principalObjectId: opsObjectId
+    principalType: opsObjectIdType
 
     roles: [
       'ba92f5b4-2d11-453d-a403-e96b0029c9fe' // Storage Blob Data Contributor
@@ -278,16 +293,16 @@ module fileShareStorageAccounts './storage-account.bicep' = [for (location, i) i
     subnetName: '${sharedSubnetNamePrefix}-${location}'
   }
 
-  dependsOn: [ keyVaultRoleAssignmentsForUser ]
+  dependsOn: [ keyVaultRoleAssignmentsForOps ]
 }]
 
-module fileShareStorageAccountRoleAssignmentsForUser './storage-account-role-assignments.bicep' = [for location in locations: {
-  name: 'fileShareStorageAccountRoleAssignmentsForUser-${location}'
+module fileShareStorageAccountRoleAssignmentsForOps './storage-account-role-assignments.bicep' = [for location in locations: {
+  name: 'fileShareStorageAccountRoleAssignmentsForOps-${location}'
 
   params: {
     storageAccountName: '${fileShareStorageAccountNamePrefix}${location}'
-    principalObjectId: userObjectId
-    principalType: 'User'
+    principalObjectId: opsObjectId
+    principalType: opsObjectIdType
 
     roles: [
       '0c867c2a-1d8c-454a-a3db-ab2ea1bdc8bb' // Storage File Data SMB Share Contributor
@@ -308,6 +323,37 @@ module fileShares './storage-file-share.bicep' = [for location in locations: {
   dependsOn: [ fileShareStorageAccounts ]
 }]
 
+module containerRegistry './container-registry.bicep' = if (!empty(containerImage)) {
+  name: 'containerRegistry'
+
+  params: {
+    containerRegistryName: containerRegistryName
+    location: coreLocation
+    privateNetworkEnabled: false
+    vnetResourceGroupName: resourceGroup().name
+    vnetName: coreVnetName
+    subnetName: coreSharedSubnetName
+  }
+}
+
+module containerRegistryRoleAssignmentsForOps './container-registry-role-assignments.bicep' = if (!empty(containerImage)) {
+  name: 'containerRegistryRoleAssignmentsForOps'
+
+  params: {
+    containerRegistryName: containerRegistryName
+    principalObjectId: opsObjectId
+    principalType: opsObjectIdType
+
+    roles: [
+      'c2f4ef07-c644-48eb-af81-4b1b4947fb11' // AcrDelete
+      '7f951dda-4ed3-4680-a7ca-43fe172d538d' // AcrPull
+      '8311e382-0749-4cb8-b61a-304f252e45ec' // AcrPush
+    ]
+  }
+
+  dependsOn: [ containerRegistry ]
+}
+
 module appServicePlan './app-service-plan.bicep' = {
   name: 'appServicePlan'
 
@@ -325,11 +371,11 @@ module appService './app-service.bicep' = {
     appServiceName: appServiceName
     serverFarmId: appServicePlan.outputs.appServicePlanId
     location: coreLocation
+    kind: empty(containerImage) ? 'app,linux' : 'app,linux,container'
     allowPublicNetworkAccess: true
     privateNetworkEnabled: true
 
     siteConfig: {
-      linuxFxVersion: 'DOTNETCORE|6.0'
       vnetRouteAllEnabled: true
       http20Enabled: true
     }
@@ -358,10 +404,7 @@ module keyVaultRoleAssignmentsForAppService './key-vault-role-assignments.bicep'
     ]
   }
 
-  dependsOn: [
-    appService
-    keyVault
-  ]
+  dependsOn: [ keyVault ]
 }
 
 module blobStorageAccountRoleAssignmentsForAppService './storage-account-role-assignments.bicep' = [for location in locations: {
@@ -377,10 +420,7 @@ module blobStorageAccountRoleAssignmentsForAppService './storage-account-role-as
     ]
   }
 
-  dependsOn: [
-    appService
-    blobStorageAccounts
-  ]
+  dependsOn: [ blobStorageAccounts ]
 }]
 
 module fileShareStorageAccountRoleAssignmentsForAppService './storage-account-role-assignments.bicep' = [for location in locations: {
@@ -396,11 +436,24 @@ module fileShareStorageAccountRoleAssignmentsForAppService './storage-account-ro
     ]
   }
 
-  dependsOn: [
-    appService
-    fileShareStorageAccounts
-  ]
+  dependsOn: [ fileShareStorageAccounts ]
 }]
+
+module containerRegistryRoleAssignmentsForAppService './container-registry-role-assignments.bicep' = if (!empty(containerImage)) {
+  name: 'containerRegistryRoleAssignmentsAppService'
+
+  params: {
+    containerRegistryName: containerRegistryName
+    principalObjectId: appService.outputs.identityPrincipalObjectId
+    principalType: 'ServicePrincipal'
+
+    roles: [
+      '7f951dda-4ed3-4680-a7ca-43fe172d538d' // AcrPull
+    ]
+  }
+
+  dependsOn: [ containerRegistry ]
+}
 
 module appServiceSettings './app-service-settings.bicep' = {
   name: 'appServiceSettings'
@@ -417,6 +470,13 @@ module appServiceSettings './app-service-settings.bicep' = {
       BLOB_STORAGE_ACCOUNT_NAME_PREFIX: blobStorageAccountNamePrefix
       FILE_SHARE_STORAGE_ACCOUNT_NAME_PREFIX: fileShareStorageAccountNamePrefix
       PRIVATE_CONNECTIVITY_METHOD: storageAccountPrivateConnectivityMethod
+    }
+
+    siteConfigProperties: empty(containerImage) ? {
+      linuxFxVersion: 'DOTNETCORE|6.0'
+    } : {
+      acrUseManagedIdentityCreds: true
+      linuxFxVersion: 'DOCKER|${containerImage}'
     }
   }
 
