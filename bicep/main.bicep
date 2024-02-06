@@ -3,7 +3,7 @@
   'test'
   'prod'
 ])
-param environmentAbbreviated string = 'dev'
+param env string = 'dev'
 
 @minLength(2)
 @maxLength(2)
@@ -49,18 +49,18 @@ var privateDnsZoneNames = [
 ]
 
 var coreLocation = locations[0]
-var vnetNames = [for location in locations: 'vnet-copytest${resourceNameMeronym}-${environmentAbbreviated}-${location}']
-var coreVnetName = 'vnet-copytest${resourceNameMeronym}-${environmentAbbreviated}-${coreLocation}'
-var sharedSubnetNamePrefix = 'snet-copytest${resourceNameMeronym}-shared-${environmentAbbreviated}'
-var appsSubnetName = 'snet-copytest${resourceNameMeronym}-apps-${environmentAbbreviated}-${coreLocation}'
+var vnetNames = [for location in locations: 'vnet-copytest${resourceNameMeronym}-${env}-${location}']
+var coreVnetName = 'vnet-copytest${resourceNameMeronym}-${env}-${coreLocation}'
+var sharedSubnetNamePrefix = 'snet-copytest${resourceNameMeronym}-shared-${env}'
+var appsSubnetName = 'snet-copytest${resourceNameMeronym}-apps-${env}-${coreLocation}'
 var coreSharedSubnetName = '${sharedSubnetNamePrefix}-${coreLocation}'
-var coreResourceNameSuffix = 'copytest${resourceNameMeronym}-${environmentAbbreviated}-${coreLocation}'
-var keyVaultName = 'kv-copytest${resourceNameMeronym}-${environmentAbbreviated}'
-var blobStorageAccountNamePrefix = 'stctb${resourceNameMeronym}${environmentAbbreviated}'
+var coreResourceNameSuffix = 'copytest${resourceNameMeronym}-${env}-${coreLocation}'
+var keyVaultName = 'kv-copytest${resourceNameMeronym}-${env}'
+var blobStorageAccountNamePrefix = 'stctb${resourceNameMeronym}${env}'
 var blobContainerName = 'copytest'
-var fileShareStorageAccountNamePrefix = 'stctf${resourceNameMeronym}${environmentAbbreviated}'
+var fileShareStorageAccountNamePrefix = 'stctf${resourceNameMeronym}${env}'
 var fileShareName = blobContainerName
-var containerRegistryName = 'cr${resourceNameMeronym}${environmentAbbreviated}'
+var containerRegistryName = 'cr${resourceNameMeronym}${env}'
 var containerImage = empty(appContainerImageName) ? '' : '${containerRegistryName}.azurecr.io/${appContainerImageName}:${appContainerImageTag}'
 var appServicePlanName = 'asp-${coreResourceNameSuffix}'
 var appServiceName = 'app-${coreResourceNameSuffix}'
