@@ -1,0 +1,67 @@
+name: Infrastructure workflow
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Environment to deploy (dev, test or prod)
+        required: true
+        type: choice
+        options:
+          - dev
+          - test
+          - prod
+        default: dev
+      meronym:
+        description: Resource name meronym (2 lower case, alphanumeric characters)
+        required: true
+        default: '00'
+
+jobs:
+  provision-infrastructure:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@main
+
+    - uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+    - name: Generate variables
+      run: |
+        azure_subscription_id=$(az account show | jq -r .id)
+        ops_object_id=$(az ad signed-in-user show | jq -r .id)
+        resource_group_name="rg-copytest${{ github.event.inputs.meronym }}-${{ github.event.inputs.environment }}"
+        location="westeurope"
+        container_image_name="blobcopytestapp-${{ github.event.inputs.environment }}"
+
+        echo "azure_subscription_id=${azure_subscription_id}" >> "$GITHUB_ENV"
+        echo "ops_object_id=${ops_object_id}" >> "$GITHUB_ENV"
+        echo "resource_group_name=${resource_group_name}" >> "$GITHUB_ENV"
+        echo "location=${location}" >> "$GITHUB_ENV"
+        echo "container_image_name=${container_image_name}" >> "$GITHUB_ENV"
+
+    - name: Create resource group
+      uses: Azure/CLI@v1
+      with:
+        inlineScript: |
+          #!/bin/bash
+          az group create \
+            --name "${{ env.resource_group_name }}" \
+            --location "${{ env.location }}" \
+            --subscription "${{ env.azure_subscription_id }}"
+
+    - name: Provision core infrastructure
+      uses: azure/arm-deploy@v1
+      with:
+        subscriptionId: ${{ env.azure_subscription_id }}
+        resourceGroupName: ${{ env.resource_group_name }}
+        template: ./bicep/main.bicep
+        parameters: |
+            env=${{ github.event.inputs.environment }}
+            resourceNameMeronym=${{ github.event.inputs.meronym }}
+            opsObjectId=${{ env.ops_object_id }}
+            opsObjectIdType=ServicePrincipal
+            storageAccountPrivateConnectivityMethod=privateEndpoint
+            appContainerImageName=${{ env.container_image_name }}
+        failOnStdErr: true

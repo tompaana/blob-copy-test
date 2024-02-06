@@ -20,7 +20,6 @@ param opsObjectId string
 ])
 param opsObjectIdType string = 'User'
 
-
 @allowed([
   'privateEndpoint'
   'serviceEndpoint'
