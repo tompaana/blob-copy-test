@@ -30,7 +30,8 @@ jobs:
     - name: Generate variables
       run: |
         azure_subscription_id=$(az account show | jq -r .id)
-        ops_object_id=$(az ad signed-in-user show | jq -r .id)
+        ops_service_principal_client_id=$(az account show | jq -r .user.name)
+        ops_object_id=$(az ad sp show --id "$ops_service_principal_client_id" | jq -r .id)
         resource_group_name="rg-copytest${{ github.event.inputs.meronym }}-${{ github.event.inputs.environment }}"
         location="westeurope"
         container_image_name="blobcopytestapp-${{ github.event.inputs.environment }}"
@@ -57,19 +58,16 @@ jobs:
         subscriptionId: ${{ env.azure_subscription_id }}
         resourceGroupName: ${{ env.resource_group_name }}
         template: ./bicep/main.bicep
-        parameters: |
-            env=${{ github.event.inputs.environment }}
-            resourceNameMeronym=${{ github.event.inputs.meronym }}
-            opsObjectId=${{ env.ops_object_id }}
-            opsObjectIdType=ServicePrincipal
-            storageAccountPrivateConnectivityMethod=privateEndpoint
-            appContainerImageName=${{ env.container_image_name }}
+        parameters:
+          env=${{ github.event.inputs.environment }}
+          resourceNameMeronym=${{ github.event.inputs.meronym }}
+          opsObjectId=${{ env.ops_object_id }}
+          opsObjectIdType=ServicePrincipal
+          storageAccountPrivateConnectivityMethod=privateEndpoint
+          appContainerImageName=${{ env.container_image_name }}
         failOnStdErr: true
 
     - name: Whitelist agent and upload blobs
-      uses: Azure/CLI@v1
-      with:
-        inlineScript: |
-            ./scripts/whitelist.sh --env ${{ github.event.inputs.environment }} --meronym ${{ github.event.inputs.meronym }} --wait
-            ./scripts/upload-blobs.sh --env ${{ github.event.inputs.environment }} --meronym ${{ github.event.inputs.meronym }} --filepath ./assets/test.txt
-        failOnStdErr: true
+      run: |
+        ./scripts/whitelist.sh --env ${{ github.event.inputs.environment }} --meronym ${{ github.event.inputs.meronym }} --wait
+        ./scripts/upload-blobs.sh --env ${{ github.event.inputs.environment }} --meronym ${{ github.event.inputs.meronym }} --filepath ./assets/test.txt

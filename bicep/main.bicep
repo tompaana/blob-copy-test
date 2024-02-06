@@ -59,7 +59,7 @@ var blobStorageAccountNamePrefix = 'stctb${resourceNameMeronym}${env}'
 var blobContainerName = 'copytest'
 var fileShareStorageAccountNamePrefix = 'stctf${resourceNameMeronym}${env}'
 var fileShareName = blobContainerName
-var containerRegistryName = 'cr${resourceNameMeronym}${env}'
+var containerRegistryName = 'crcopytest${resourceNameMeronym}${env}'
 var containerImage = empty(appContainerImageName) ? '' : '${containerRegistryName}.azurecr.io/${appContainerImageName}:${appContainerImageTag}'
 var appServicePlanName = 'asp-${coreResourceNameSuffix}'
 var appServiceName = 'app-${coreResourceNameSuffix}'
@@ -333,6 +333,11 @@ module containerRegistry './container-registry.bicep' = if (!empty(containerImag
     vnetName: coreVnetName
     subnetName: coreSharedSubnetName
   }
+
+  dependsOn: [
+    privateDnsZones
+    virtualNetworks
+  ]
 }
 
 module containerRegistryRoleAssignmentsForOps './container-registry-role-assignments.bicep' = if (!empty(containerImage)) {
