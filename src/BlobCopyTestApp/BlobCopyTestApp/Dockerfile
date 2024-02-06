@@ -6,13 +6,18 @@ EXPOSE 80
 EXPOSE 443
 
 FROM mcr.microsoft.com/dotnet/sdk:6.0 AS build
-ARG BUILD_CONFIGURATION=Release
+
+ARG SEMVER_PREFIX=2.1.0
+ARG DEPLOYMENT_ENVIRONMENT=dev
+ARG COMMIT_SHA
+ARG BUILD_CONFIGURATION=Debug
+
 WORKDIR /src
 COPY ["BlobCopyTestApp/BlobCopyTestApp.csproj", "BlobCopyTestApp/"]
 RUN dotnet restore "./BlobCopyTestApp/./BlobCopyTestApp.csproj"
 COPY . .
 WORKDIR "/src/BlobCopyTestApp"
-RUN dotnet build "./BlobCopyTestApp.csproj" -c $BUILD_CONFIGURATION -o /app/build
+RUN dotnet build "./BlobCopyTestApp.csproj" --configuration $BUILD_CONFIGURATION --output /app/build /property:Version="${SEMVER_PREFIX}-${DEPLOYMENT_ENVIRONMENT}+${COMMIT_SHA}" /warnaserror
 
 FROM build AS publish
 ARG BUILD_CONFIGURATION=Release

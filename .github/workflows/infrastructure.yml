@@ -65,3 +65,10 @@ jobs:
             storageAccountPrivateConnectivityMethod=privateEndpoint
             appContainerImageName=${{ env.container_image_name }}
         failOnStdErr: true
+
+    - name: Whitelist agent and upload blobs
+      uses: Azure/CLI@v1
+      with:
+        inlineScript: |
+            ./scripts/whitelist.sh --env ${{ github.event.inputs.environment }} --meronym ${{ github.event.inputs.meronym }} --wait
+            ./scripts/upload-blobs.sh --env ${{ github.event.inputs.environment }} --meronym ${{ github.event.inputs.meronym }} --filepath ./assets/test.txt
