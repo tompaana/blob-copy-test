@@ -104,7 +104,7 @@ az deployment group create `
     --resource-group $ResourceGroupName `
     --template-file ./bicep/main.bicep `
     --parameters `
-        environmentAbbreviated=$Environment `
+        env=$Environment `
         resourceNameMeronym=$ResourceNameMeronym `
-        userObjectId=$UserObjectId `
+        opsObjectId=$UserObjectId `
         storageAccountPrivateConnectivityMethod=$StorageAccountPrivateConnectivityMethod
