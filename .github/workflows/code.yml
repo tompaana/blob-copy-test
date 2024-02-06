@@ -1,0 +1,59 @@
+name: Code deployment workflow
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Environment to deploy (dev, test or prod)
+        required: true
+        type: choice
+        options:
+          - dev
+          - test
+          - prod
+        default: dev
+      meronym:
+        description: Resource name meronym (2 lower case, alphanumeric characters)
+        required: true
+        default: '00'
+
+jobs:
+  code-deployment:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@main
+
+    - name: Generate variables
+      run: |
+        container_registry_name="crcopytest${{ github.event.inputs.meronym }}${{ github.event.inputs.environment }}"
+        login_server="${container_registry_name}${{ github.event.inputs.environment }}.azurecr.io"
+        container_image_name="blobcopytestapp-${{ github.event.inputs.environment }}"
+
+        echo "container_registry_name=${container_registry_name}" >> "$GITHUB_ENV"
+        echo "container_image_tag_sha=${login_server}/${container_image_name}:${{ github.sha }}" >> "$GITHUB_ENV"
+        echo "container_image_tag_latest=${login_server}/${container_image_name}:latest" >> "$GITHUB_ENV"
+
+    - uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+    - name: Container registry login
+      uses: Azure/CLI@v1
+      with:
+        inlineScript: |
+          #!/bin/bash
+          az acr login --name "${{ env.container_registry_name }}"
+
+    - name: Build and push API container image
+      run: |
+        docker build . \
+          --file ./src/BlobCopyTestApp/BlobCopyTestApp/Dockerfile \
+          --tag "${{ env.container_image_tag_sha }}" \
+          --tag "${{ env.container_image_tag_latest }}" \
+          --build-arg="SEMVER_PREFIX=2.1.0" \
+          --build-arg="DEPLOYMENT_ENVIRONMENT=${{ github.event.inputs.environment }}" \
+          --build-arg="COMMIT_SHA=${{ github.sha }}" \
+          --build-arg="BUILD_CONFIGURATION=Debug"
+
+        docker push "${{ env.container_image_tag_sha }}"
+        docker push "${{ env.container_image_tag_latest }}"

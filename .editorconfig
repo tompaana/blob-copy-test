@@ -8,7 +8,7 @@ indent_style = space
 # Note that there is a corresponding setting set in the `.gitattributes` file
 # which should be regarded when adding/removing file types from this list.
 
-[*.bicep]
+[*.{bicep,yml,yaml}]
 end_of_line = lf
 indent_size = 2
 insert_final_newline = true
