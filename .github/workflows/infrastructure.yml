@@ -51,7 +51,7 @@ jobs:
             --location "${{ env.location }}" \
             --subscription "${{ env.azure_subscription_id }}"
 
-    - name: Provision core infrastructure
+    - name: Provision infrastructure
       uses: azure/arm-deploy@v1
       with:
         subscriptionId: ${{ env.azure_subscription_id }}
