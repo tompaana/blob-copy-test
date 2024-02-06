@@ -69,8 +69,8 @@ for storage_account_name in "${storage_account_names[@]}"; do
 done
 
 if [ "$wait" = true ]; then
-    echo "Taking a nap for 15 seconds..."
-    sleep 15
+    echo "Taking a nap for 30 seconds..."
+    sleep 30
 fi
 
 echo "Done"
