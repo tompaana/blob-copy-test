@@ -72,3 +72,4 @@ jobs:
         inlineScript: |
             ./scripts/whitelist.sh --env ${{ github.event.inputs.environment }} --meronym ${{ github.event.inputs.meronym }} --wait
             ./scripts/upload-blobs.sh --env ${{ github.event.inputs.environment }} --meronym ${{ github.event.inputs.meronym }} --filepath ./assets/test.txt
+        failOnStdErr: true
