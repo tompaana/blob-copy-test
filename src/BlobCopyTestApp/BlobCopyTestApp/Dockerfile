@@ -5,7 +5,7 @@ EXPOSE 443
 
 FROM mcr.microsoft.com/dotnet/sdk:6.0 AS build
 
-ARG SEMVER_PREFIX=2.1.0
+ARG SEMVER_PREFIX=0.1.0
 ARG DEPLOYMENT_ENVIRONMENT=dev
 ARG COMMIT_SHA
 ARG BUILD_CONFIGURATION=Debug
@@ -17,8 +17,7 @@ WORKDIR "/src/BlobCopyTestApp"
 RUN dotnet build "./BlobCopyTestApp.csproj" --configuration $BUILD_CONFIGURATION --output /app/build /property:Version="${SEMVER_PREFIX}-${DEPLOYMENT_ENVIRONMENT}+${COMMIT_SHA}" /warnaserror
 
 FROM build AS publish
-ARG BUILD_CONFIGURATION=Release
-RUN dotnet publish "./BlobCopyTestApp.csproj" -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false
+RUN dotnet publish "./BlobCopyTestApp.csproj" --configuration $BUILD_CONFIGURATION --output /app/publish /property:UseAppHost=false /property:Version="${SEMVER_PREFIX}-${DEPLOYMENT_ENVIRONMENT}+${COMMIT_SHA}" /warnaserror
 
 FROM base AS final
 WORKDIR /app

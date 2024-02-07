@@ -46,7 +46,7 @@ jobs:
           --file ./src/BlobCopyTestApp/BlobCopyTestApp/Dockerfile \
           --tag "${{ env.container_image_tag_sha }}" \
           --tag "${{ env.container_image_tag_latest }}" \
-          --build-arg="SEMVER_PREFIX=2.1.0" \
+          --build-arg="SEMVER_PREFIX=0.2.2" \
           --build-arg="DEPLOYMENT_ENVIRONMENT=${{ github.event.inputs.environment }}" \
           --build-arg="COMMIT_SHA=${{ github.sha }}" \
           --build-arg="BUILD_CONFIGURATION=Debug"
