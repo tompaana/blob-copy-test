@@ -1,13 +1,15 @@
 FROM mcr.microsoft.com/dotnet/aspnet:6.0 AS base
-ARG SEMVER_PREFIX=0.1.0
-ARG DEPLOYMENT_ENVIRONMENT=dev
-ARG COMMIT_SHA
-ARG BUILD_CONFIGURATION=Debug
 WORKDIR /app
 EXPOSE 80
 EXPOSE 443
 
 FROM mcr.microsoft.com/dotnet/sdk:6.0 AS build
+
+ARG SEMVER_PREFIX=0.1.0
+ARG DEPLOYMENT_ENVIRONMENT=dev
+ARG COMMIT_SHA
+ARG BUILD_CONFIGURATION=Debug
+
 WORKDIR /src
 COPY ./src/BlobCopyTestApp ./
 RUN dotnet restore "./BlobCopyTestApp/BlobCopyTestApp.csproj"
